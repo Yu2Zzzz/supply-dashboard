@@ -1,15 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 
 // ============ API 配置 ============
-const BASE_URL = import.meta.env.PROD
-  ? 'https://supply-backend-g3gm.onrender.com'
-  : 'http://localhost:4000';
-
-useEffect(() => {
-  axios.get(`${BASE_URL}/api/data`)
-    .then((res) => setBackendData(res.data))
-    .catch((err) => console.error(err));
-}, []);
+const BASE_URL = 'https://supply-backend-g3gm.onrender.com';
 
 // ============ 工具函数 ============
 const TODAY = new Date();
@@ -116,7 +108,6 @@ const GlassCard = ({ children, style, color = '#3b82f6' }) => (
   <div style={{ background: `linear-gradient(135deg, ${color}08 0%, ${color}03 100%)`, backdropFilter: 'blur(20px)', borderRadius: 20, padding: 20, border: `1px solid ${color}15`, boxShadow: `0 8px 32px ${color}08`, ...style }}>{children}</div>
 );
 
-// 统计卡片 - 提高文字对比度
 const StatCard = ({ icon, label, value, sub, color }) => (
   <GlassCard color={color} style={{ flex: 1, minWidth: 170, padding: 20 }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
@@ -609,53 +600,50 @@ const WarningsPage = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // 从后端获取预警数据
-useEffect(() => {
-  let cancelled = false; // 防止组件卸载后继续 setState
+  useEffect(() => {
+    let cancelled = false;
 
-  const fetchWarnings = async () => {
-    setLoading(true);
-    setError(null);
+    const fetchWarnings = async () => {
+      setLoading(true);
+      setError(null);
 
-    try {
-      const res = await fetch(`${API_BASE}/api/warnings`);
+      try {
+        const res = await fetch(`${BASE_URL}/api/warnings`);
 
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+
+        const result = await res.json();
+
+        const levelOrder = { RED: 1, ORANGE: 2, YELLOW: 3, BLUE: 4 };
+        const sorted = [...result].sort((a, b) => {
+          const levelDiff = (levelOrder[a.level] || 99) - (levelOrder[b.level] || 99);
+          if (levelDiff !== 0) return levelDiff;
+          return new Date(a.dueDate) - new Date(b.dueDate);
+        });
+
+        if (!cancelled) {
+          setWarnings(sorted);
+        }
+      } catch (err) {
+        console.error('Failed to fetch warnings:', err);
+        if (!cancelled) {
+          setError(err.message || '获取预警数据失败');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
+    };
 
-      const result = await res.json();
+    fetchWarnings();
 
-      // 按预警等级排序: RED > ORANGE > YELLOW > BLUE，然后按交期升序
-      const levelOrder = { RED: 1, ORANGE: 2, YELLOW: 3, BLUE: 4 };
-      const sorted = [...result].sort((a, b) => {
-        const levelDiff = (levelOrder[a.level] || 99) - (levelOrder[b.level] || 99);
-        if (levelDiff !== 0) return levelDiff;
-        return new Date(a.dueDate) - new Date(b.dueDate);
-      });
-
-      if (!cancelled) {
-        setWarnings(sorted);
-      }
-    } catch (err) {
-      console.error('Failed to fetch warnings:', err);
-      if (!cancelled) {
-        setError(err.message || '获取预警数据失败');
-      }
-    } finally {
-      if (!cancelled) {
-        setLoading(false);
-      }
-    }
-  };
-
-  fetchWarnings();
-
-  // 清理函数：组件卸载时避免 setState
-  return () => {
-    cancelled = true;
-  };
-}, [API_BASE]);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const levelConfig = {
     RED: { color: '#ef4444', bg: '#fef2f2', text: '严重', icon: '🔴' },
@@ -672,7 +660,6 @@ useEffect(() => {
     BLUE: warnings.filter(w => w.level === 'BLUE').length,
   };
 
-  // 加载中状态
   if (loading) {
     return (
       <div data-page="warnings-loading">
@@ -682,7 +669,6 @@ useEffect(() => {
     );
   }
 
-  // 错误状态
   if (error) {
     return (
       <div data-page="warnings-error">
@@ -802,12 +788,11 @@ export default function App() {
   const nav = useCallback((type, data) => { setHistory(h => [...h, page]); setPage({ type, data }); }, [page]);
   const back = useCallback(() => { if (history.length) { setPage(history[history.length - 1]); setHistory(h => h.slice(0, -1)); } }, [history]);
 
-  // 从后端获取数据
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE}/api/data`);
+      const response = await fetch(`${BASE_URL}/api/data`);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -825,17 +810,14 @@ export default function App() {
     fetchData();
   }, [fetchData]);
 
-  // 加载中
   if (loading) {
     return <LoadingScreen />;
   }
 
-  // 加载失败
   if (error) {
     return <ErrorScreen error={error} onRetry={fetchData} />;
   }
 
-  // 数据为空
   if (!data) {
     return <ErrorScreen error="未获取到数据" onRetry={fetchData} />;
   }
@@ -880,7 +862,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* 主内容区域 - 调整布局让内容更宽，更好利用屏幕空间 */}
       <div style={{ maxWidth: '95%', width: '100%', margin: '0 auto', padding: 28 }}>
         {page.type === 'dashboard' && <Dashboard {...sharedProps} onNav={nav} />}
         {page.type === 'order' && <OrderDetail {...sharedProps} id={page.data} onNav={nav} onBack={back} />}
