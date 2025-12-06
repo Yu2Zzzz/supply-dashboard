@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { AlertCircle, Package, TrendingUp, TrendingDown, ChevronLeft, CheckCircle, AlertTriangle, XCircle, Clock, Factory, Users, Calendar, Box, Truck, AlertOctagon, Filter, ChevronRight, Layers, ShoppingCart } from 'lucide-react';
 
 // ============ API 配置 ============
 const BASE_URL = 'https://supply-backend-g3gm.onrender.com';
@@ -8,14 +9,14 @@ const TODAY = new Date();
 const daysDiff = (d1, d2) => Math.round((new Date(d1) - new Date(d2)) / 86400000);
 
 const RISK = {
-  ongoing: { color: '#10b981', bg: '#ecfdf5', gradient: 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)', text: '正常', icon: '✓', priority: 1 },
-  warning: { color: '#eab308', bg: '#fefce8', gradient: 'linear-gradient(135deg, #fef9c3 0%, #fef08a 100%)', text: '预警', icon: '!', priority: 2 },
-  urgent: { color: '#f97316', bg: '#fff7ed', gradient: 'linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%)', text: '紧急', icon: '!!', priority: 3 },
-  overdue: { color: '#ef4444', bg: '#fef2f2', gradient: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)', text: '延期', icon: '✕', priority: 4 },
-  pending: { color: '#8b5cf6', bg: '#f5f3ff', gradient: 'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)', text: '待采购', icon: '○', priority: 5 },
+  ongoing: { color: '#10b981', text: '正常', icon: CheckCircle, priority: 1 },
+  warning: { color: '#f59e0b', text: '预警', icon: AlertTriangle, priority: 2 },
+  urgent: { color: '#f97316', text: '紧急', icon: AlertOctagon, priority: 3 },
+  overdue: { color: '#ef4444', text: '延期', icon: XCircle, priority: 4 },
+  pending: { color: '#8b5cf6', text: '待采购', icon: Clock, priority: 5 },
 };
 
-// ============ 风险计算 ============
+// ============ 风险计算器 ============
 function createRiskCalculator(mats, pos, suppliers) {
   const matMap = Object.fromEntries(mats.map(m => [m.code, m]));
   const poByMat = pos.reduce((a, p) => { (a[p.mat] = a[p.mat] || []).push(p); return a; }, {});
@@ -58,104 +59,163 @@ function createRiskCalculator(mats, pos, suppliers) {
 const highestRisk = risks => risks.reduce((h, r) => (RISK[r]?.priority || 0) > (RISK[h]?.priority || 0) ? r : h, 'ongoing');
 
 // ============ UI 组件 ============
+const Card = ({ children, style = {}, onClick }) => (
+  <div 
+    onClick={onClick}
+    style={{ 
+      background: '#fff', 
+      border: '1px solid #e2e8f0', 
+      borderRadius: '12px', 
+      padding: '24px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+      transition: 'box-shadow 0.2s',
+      cursor: onClick ? 'pointer' : 'default',
+      ...style 
+    }}
+    onMouseEnter={e => { if (onClick) e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'; }}
+    onMouseLeave={e => { if (onClick) e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.05)'; }}
+  >
+    {children}
+  </div>
+);
+
 const StatusBadge = ({ level, size = 'md' }) => {
   const r = RISK[level] || RISK.pending;
-  const styles = { sm: { padding: '5px 12px', fontSize: 11, gap: 4 }, md: { padding: '7px 16px', fontSize: 13, gap: 5 } };
+  const Icon = r.icon;
+  const styles = size === 'sm' 
+    ? { padding: '4px 8px', fontSize: '11px', gap: 4 }
+    : { padding: '6px 12px', fontSize: '13px', gap: 6 };
+  
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', borderRadius: 50, fontWeight: 700, color: r.color, background: r.gradient, boxShadow: `0 2px 8px ${r.color}25`, ...styles[size] }}>
-      <span style={{ fontSize: size === 'sm' ? 10 : 12 }}>{r.icon}</span>
+    <span style={{ 
+      display: 'inline-flex', 
+      alignItems: 'center', 
+      gap: styles.gap,
+      padding: styles.padding,
+      fontSize: styles.fontSize,
+      fontWeight: 600, 
+      color: r.color, 
+      backgroundColor: `${r.color}10`, 
+      border: `1px solid ${r.color}30`,
+      borderRadius: '50px'
+    }}>
+      <Icon size={size === 'sm' ? 12 : 14} />
       <span>{r.text}</span>
     </span>
   );
 };
 
-const ScoreBar = ({ score, size = 'md' }) => {
-  const color = score >= 50 ? '#ef4444' : score >= 25 ? '#f97316' : score >= 10 ? '#eab308' : '#10b981';
-  const w = size === 'sm' ? 36 : 48, h = size === 'sm' ? 5 : 6;
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ width: w, height: h, background: '#e2e8f0', borderRadius: h, overflow: 'hidden' }}>
-        <div style={{ width: `${score}%`, height: '100%', background: `linear-gradient(90deg, ${color}99, ${color})`, borderRadius: h, transition: 'width 0.5s ease' }} />
+const MetricCard = ({ icon: Icon, label, value, sublabel }) => (
+  <Card style={{ flex: 1, minWidth: '200px' }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' }}>
+      <div style={{ padding: '8px', background: '#f8fafc', borderRadius: '8px' }}>
+        <Icon size={20} style={{ color: '#475569' }} />
       </div>
-      <span style={{ fontSize: size === 'sm' ? 12 : 14, fontWeight: 800, color, minWidth: 22, fontFamily: 'SF Mono, monospace' }}>{score}</span>
     </div>
-  );
-};
+    <div style={{ fontSize: '11px', fontWeight: 500, color: '#64748b', marginBottom: '4px' }}>{label}</div>
+    <div style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>{value}</div>
+    {sublabel && <div style={{ fontSize: '11px', color: '#64748b' }}>{sublabel}</div>}
+  </Card>
+);
 
-const DaysTag = ({ days, compact }) => {
-  const color = days <= 5 ? '#ef4444' : days <= 10 ? '#f97316' : days <= 15 ? '#eab308' : '#10b981';
-  const bg = days <= 5 ? '#fef2f2' : days <= 10 ? '#fff7ed' : days <= 15 ? '#fefce8' : '#ecfdf5';
+const Button = ({ children, onClick, variant = 'primary', icon: Icon, style = {} }) => {
+  const variants = {
+    primary: { background: '#3b82f6', color: '#fff', border: 'none' },
+    secondary: { background: '#fff', color: '#374151', border: '1px solid #d1d5db' },
+    danger: { background: '#ef4444', color: '#fff', border: 'none' },
+  };
+  
+  const [isHover, setIsHover] = useState(false);
+  
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: compact ? '4px 10px' : '6px 14px', borderRadius: 50, fontSize: compact ? 11 : 13, fontWeight: 700, color, background: bg, boxShadow: `0 2px 6px ${color}15` }}>
-      <span style={{ fontSize: compact ? 10 : 11 }}>⏱</span> {days}天
-    </span>
+    <button 
+      onClick={onClick}
+      onMouseEnter={() => setIsHover(true)}
+      onMouseLeave={() => setIsHover(false)}
+      style={{ 
+        display: 'inline-flex', 
+        alignItems: 'center', 
+        gap: '8px',
+        padding: '10px 16px',
+        fontSize: '14px',
+        fontWeight: 600,
+        borderRadius: '8px',
+        cursor: 'pointer',
+        transition: 'all 0.2s',
+        opacity: isHover ? 0.9 : 1,
+        ...variants[variant],
+        ...style
+      }}
+    >
+      {Icon && <Icon size={16} />}
+      {children}
+    </button>
   );
 };
 
-const Card = ({ children, style, onClick, glow }) => (
-  <div onClick={onClick} style={{ 
-    background: 'linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)', 
-    borderRadius: 20, padding: 20, 
-    boxShadow: glow ? `0 8px 32px ${glow}20, 0 2px 8px rgba(0,0,0,0.04)` : '0 4px 24px rgba(0,0,0,0.04)',
-    border: '1px solid rgba(255,255,255,0.8)',
-    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-    cursor: onClick ? 'pointer' : 'default',
-    ...style 
-  }}>{children}</div>
-);
-
-const GlassCard = ({ children, style, color = '#3b82f6' }) => (
-  <div style={{ background: `linear-gradient(135deg, ${color}08 0%, ${color}03 100%)`, backdropFilter: 'blur(20px)', borderRadius: 20, padding: 20, border: `1px solid ${color}15`, boxShadow: `0 8px 32px ${color}08`, ...style }}>{children}</div>
-);
-
-const StatCard = ({ icon, label, value, sub, color }) => (
-  <GlassCard color={color} style={{ flex: 1, minWidth: 170, padding: 20 }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-      <div style={{ width: 38, height: 38, borderRadius: 12, background: `linear-gradient(135deg, ${color}20, ${color}10)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>{icon}</div>
-      <span style={{ fontSize: 13, color: '#475569', fontWeight: 600 }}>{label}</span>
+const EmptyState = ({ icon: Icon, title, description }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '64px 20px', textAlign: 'center' }}>
+    <div style={{ width: '64px', height: '64px', marginBottom: '16px', background: '#f1f5f9', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Icon size={32} style={{ color: '#94a3b8' }} />
     </div>
-    <div style={{ fontSize: 34, fontWeight: 800, color, letterSpacing: '-1px' }}>{value}</div>
-    {sub && <div style={{ fontSize: 12, color: '#64748b', marginTop: 6, fontWeight: 600 }}>{sub}</div>}
-  </GlassCard>
-);
-
-const BackButton = ({ onClick }) => (
-  <button onClick={onClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'linear-gradient(135deg, #f1f5f9, #e2e8f0)', border: 'none', borderRadius: 12, padding: '10px 18px', cursor: 'pointer', fontSize: 14, fontWeight: 600, color: '#475569', marginBottom: 20 }}>
-    <span style={{ fontSize: 16 }}>←</span> 返回
-  </button>
-);
-
-const EmptyState = ({ icon, text }) => (
-  <div style={{ padding: 50, textAlign: 'center' }}>
-    <div style={{ width: 80, height: 80, margin: '0 auto 16px', borderRadius: 20, background: 'linear-gradient(135deg, #f1f5f9, #e2e8f0)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36 }}>{icon}</div>
-    <div style={{ fontSize: 15, color: '#64748b', fontWeight: 600 }}>{text}</div>
+    <div style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>{title}</div>
+    <div style={{ fontSize: '14px', color: '#64748b' }}>{description}</div>
   </div>
 );
 
 const LoadingScreen = () => (
-  <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+  <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
     <div style={{ textAlign: 'center' }}>
-      <div style={{ width: 80, height: 80, margin: '0 auto 24px', borderRadius: 20, background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, animation: 'pulse 2s infinite' }}>🏭</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: '#1e293b', marginBottom: 8 }}>加载中...</div>
-      <div style={{ fontSize: 14, color: '#64748b' }}>正在获取供应链数据</div>
+      <div style={{ width: '64px', height: '64px', margin: '0 auto 24px', background: '#3b82f6', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse 2s infinite' }}>
+        <Factory size={32} style={{ color: '#fff' }} />
+      </div>
+      <div style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', marginBottom: '8px' }}>加载中</div>
+      <div style={{ fontSize: '14px', color: '#64748b' }}>正在获取供应链数据...</div>
     </div>
   </div>
 );
 
 const ErrorScreen = ({ error, onRetry }) => (
-  <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #fef2f2 0%, #fee2e2 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-    <div style={{ textAlign: 'center', maxWidth: 400, padding: 20 }}>
-      <div style={{ width: 80, height: 80, margin: '0 auto 24px', borderRadius: 20, background: 'linear-gradient(135deg, #ef4444, #dc2626)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36 }}>⚠️</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: '#1e293b', marginBottom: 8 }}>数据加载失败</div>
-      <div style={{ fontSize: 14, color: '#64748b', marginBottom: 20 }}>{error}</div>
-      <button onClick={onRetry} style={{ padding: '12px 24px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>重试</button>
-    </div>
+  <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+    <Card style={{ maxWidth: '400px', textAlign: 'center' }}>
+      <div style={{ width: '64px', height: '64px', margin: '0 auto 24px', background: '#fee2e2', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <AlertCircle size={32} style={{ color: '#ef4444' }} />
+      </div>
+      <div style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', marginBottom: '8px' }}>连接错误</div>
+      <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '24px' }}>{error}</div>
+      <Button onClick={onRetry} variant="primary">重新连接</Button>
+    </Card>
   </div>
 );
 
-// ============ Dashboard ============
+const TableRow = ({ children, onClick }) => {
+  const [isHover, setIsHover] = useState(false);
+  return (
+    <tr 
+      onClick={onClick}
+      onMouseEnter={() => setIsHover(true)}
+      onMouseLeave={() => setIsHover(false)}
+      style={{ 
+        cursor: 'pointer',
+        backgroundColor: isHover ? '#f8fafc' : 'transparent',
+        transition: 'background-color 0.2s'
+      }}
+    >
+      {children}
+    </tr>
+  );
+};
+
+// ============ Dashboard 仪表板 ============
 const Dashboard = ({ orders, orderLines, products, bom, mats, suppliers, pos, onNav }) => {
   const calcRisk = useMemo(() => createRiskCalculator(mats, pos, suppliers), [mats, pos, suppliers]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('orders');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    status: 'all',
+    salesPerson: 'all'
+  });
 
   const data = useMemo(() => {
     const orderData = orders.map(o => {
@@ -168,74 +228,376 @@ const Dashboard = ({ orders, orderLines, products, bom, mats, suppliers, pos, on
         });
       });
       return {
-        ...o, products: lines.map(l => l.productName), 
+        ...o, 
+        products: lines.map(l => l.productName), 
         daysLeft: daysDiff(o.deliveryDate, TODAY),
         level: highestRisk(risks.map(r => r.level)), 
         score: Math.max(0, ...risks.map(r => r.score)),
         affected: affected.size
       };
     });
-
     return { orders: orderData };
   }, [orders, orderLines, bom, calcRisk]);
+
+  // 产品数据
+  const productData = useMemo(() => {
+    return products.map(p => {
+      const lines = orderLines.filter(l => l.productCode === p.code);
+      const relatedOrders = [...new Set(lines.map(l => l.orderId))];
+      const totalQty = lines.reduce((s, l) => s + l.qty, 0);
+      const bomItems = bom.filter(b => b.p === p.code);
+      
+      const risks = lines.map(l => {
+        const o = orders.find(o => o.id === l.orderId);
+        return bomItems.map(b => calcRisk(b.m, b.c * l.qty, o.deliveryDate)).filter(Boolean);
+      }).flat();
+      
+      return {
+        ...p,
+        orderCount: relatedOrders.length,
+        totalQty,
+        materialCount: bomItems.length,
+        level: highestRisk(risks.map(r => r.level)),
+        maxScore: Math.max(0, ...risks.map(r => r.score))
+      };
+    });
+  }, [products, orderLines, bom, orders, calcRisk]);
+
+  // 获取业务员列表
+  const salesPeople = useMemo(() => [...new Set(orders.map(o => o.salesPerson).filter(Boolean))], [orders]);
+
+  // 搜索 + 筛选
+  const filteredOrders = useMemo(() => {
+    let result = data.orders;
+    
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(o => 
+        o.id.toLowerCase().includes(term) || 
+        o.customer.toLowerCase().includes(term) ||
+        o.products.some(p => p.toLowerCase().includes(term)) ||
+        (o.salesPerson && o.salesPerson.toLowerCase().includes(term))
+      );
+    }
+    
+    if (filters.status !== 'all') {
+      result = result.filter(o => o.level === filters.status);
+    }
+    
+    if (filters.salesPerson !== 'all') {
+      result = result.filter(o => o.salesPerson === filters.salesPerson);
+    }
+    
+    return result;
+  }, [data.orders, searchTerm, filters]);
+
+  const filteredProducts = useMemo(() => {
+    let result = productData;
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(p => 
+        p.code.toLowerCase().includes(term) || 
+        p.name.toLowerCase().includes(term)
+      );
+    }
+    return result;
+  }, [productData, searchTerm]);
 
   const stats = {
     overdue: data.orders.filter(o => o.level === 'overdue').length,
     urgent: data.orders.filter(o => o.level === 'urgent').length,
     warning: data.orders.filter(o => o.level === 'warning').length,
-    value: data.orders.reduce((s, o) => s + 100, 0) * 10000,
+    total: orders.length,
   };
 
+  const hasActiveFilters = filters.status !== 'all' || filters.salesPerson !== 'all';
+
   return (
-    <div>
-      <div style={{ display: 'flex', gap: 16, marginBottom: 28, flexWrap: 'wrap' }}>
-        <StatCard icon="🔴" label="已延期" value={stats.overdue} sub="需立即处理" color="#ef4444" />
-        <StatCard icon="🟠" label="紧急" value={stats.urgent} sub="风险分≥50" color="#f97316" />
-        <StatCard icon="🟡" label="预警" value={stats.warning} sub="风险分≥25" color="#eab308" />
-        <StatCard icon="💰" label="采购额" value={`¥${(stats.value/10000).toFixed(0)}万`} sub={`${orders.length}个订单`} color="#3b82f6" />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+      {/* 搜索栏 */}
+      <Card>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            type="text"
+            placeholder="搜索订单号、客户、产品、业务员..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              flex: 1,
+              minWidth: '300px',
+              padding: '10px 16px',
+              fontSize: '14px',
+              border: '1px solid #e2e8f0',
+              borderRadius: '8px',
+              outline: 'none',
+              transition: 'border 0.2s'
+            }}
+            onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+            onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              style={{
+                padding: '8px 12px',
+                fontSize: '13px',
+                fontWeight: 600,
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                background: '#fff',
+                color: '#64748b',
+                cursor: 'pointer'
+              }}
+            >
+              清除
+            </button>
+          )}
+        </div>
+      </Card>
+
+      {/* 指标卡片 */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+        <MetricCard icon={XCircle} label="已延期订单" value={stats.overdue} sublabel="需立即处理" />
+        <MetricCard icon={AlertOctagon} label="紧急订单" value={stats.urgent} sublabel="风险分 ≥50" />
+        <MetricCard icon={AlertTriangle} label="预警订单" value={stats.warning} sublabel="风险分 ≥25" />
+        <MetricCard icon={Package} label="订单总数" value={stats.total} sublabel="系统中活跃订单" />
       </div>
 
-      <Card style={{ marginBottom: 28 }}>
-        <h3 style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 800 }}>订单概览</h3>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)' }}>
-              {['订单', '客户', '产品', '交期', '剩余', '风险分', '状态', '问题'].map(h => (
-                <th key={h} style={{ padding: '16px 18px', textAlign: ['订单','客户','产品'].includes(h) ? 'left' : 'center', fontWeight: 700, fontSize: 12, color: '#64748b', borderBottom: '2px solid #e2e8f0' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.orders.map(o => (
-              <tr key={o.id} onClick={() => onNav('order', o.id)} style={{ cursor: 'pointer' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9' }}><span style={{ fontWeight: 800, fontSize: 15, background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{o.id}</span></td>
-                <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9', fontWeight: 600 }}>{o.customer}</td>
-                <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#475569', fontSize: 13, fontWeight: 500 }}>{o.products.join(', ')}</td>
-                <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9', textAlign: 'center', fontWeight: 600 }}>{o.deliveryDate}</td>
-                <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}><DaysTag days={o.daysLeft} /></td>
-                <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}><ScoreBar score={o.score} /></td>
-                <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}><StatusBadge level={o.level} /></td>
-                <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
-                  <span style={{ padding: '6px 16px', borderRadius: 50, fontSize: 14, fontWeight: 800, color: o.affected > 0 ? '#ef4444' : '#10b981', background: o.affected > 0 ? '#fef2f2' : '#ecfdf5' }}>{o.affected}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
+      {/* 标签切换 */}
+      <div style={{ display: 'flex', gap: '8px', borderBottom: '2px solid #e2e8f0' }}>
+        <button
+          onClick={() => setActiveTab('orders')}
+          style={{
+            padding: '12px 24px',
+            fontSize: '15px',
+            fontWeight: 600,
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            color: activeTab === 'orders' ? '#3b82f6' : '#64748b',
+            borderBottom: activeTab === 'orders' ? '2px solid #3b82f6' : '2px solid transparent',
+            marginBottom: '-2px',
+            transition: 'all 0.2s'
+          }}
+        >
+          订单概览 ({filteredOrders.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('products')}
+          style={{
+            padding: '12px 24px',
+            fontSize: '15px',
+            fontWeight: 600,
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            color: activeTab === 'products' ? '#3b82f6' : '#64748b',
+            borderBottom: activeTab === 'products' ? '2px solid #3b82f6' : '2px solid transparent',
+            marginBottom: '-2px',
+            transition: 'all 0.2s'
+          }}
+        >
+          产品概览 ({filteredProducts.length})
+        </button>
+      </div>
+
+      {/* 订单表格 */}
+      {activeTab === 'orders' && (
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', margin: 0 }}>订单列表</h2>
+            <div style={{ position: 'relative' }}>
+              <Button variant="secondary" icon={Filter} onClick={() => setShowFilters(!showFilters)}>
+                筛选 {hasActiveFilters && <span style={{ color: '#3b82f6' }}>●</span>}
+              </Button>
+            </div>
+          </div>
+
+          {/* 筛选面板 */}
+          {showFilters && (
+            <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px', marginBottom: '24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '8px' }}>状态</label>
+                <select 
+                  value={filters.status}
+                  onChange={(e) => setFilters({...filters, status: e.target.value})}
+                  style={{ width: '100%', padding: '8px 12px', fontSize: '14px', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}
+                >
+                  <option value="all">全部状态</option>
+                  <option value="overdue">延期</option>
+                  <option value="urgent">紧急</option>
+                  <option value="warning">预警</option>
+                  <option value="ongoing">正常</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '8px' }}>业务员</label>
+                <select 
+                  value={filters.salesPerson}
+                  onChange={(e) => setFilters({...filters, salesPerson: e.target.value})}
+                  style={{ width: '100%', padding: '8px 12px', fontSize: '14px', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}
+                >
+                  <option value="all">全部业务员</option>
+                  {salesPeople.map(sp => <option key={sp} value={sp}>{sp}</option>)}
+                </select>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <button
+                  onClick={() => setFilters({ status: 'all', salesPerson: 'all' })}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    borderRadius: '6px',
+                    border: '1px solid #e2e8f0',
+                    background: '#fff',
+                    color: '#64748b',
+                    cursor: 'pointer'
+                  }}
+                >
+                  重置筛选
+                </button>
+              </div>
+            </div>
+          )}
+          
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                  <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>订单号</th>
+                  <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>客户</th>
+                  <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>业务员</th>
+                  <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>产品</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>交期</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>剩余天数</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>状态</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>问题数</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredOrders.map(o => (
+                  <TableRow key={o.id} onClick={() => onNav('order', o.id)}>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{o.id}</div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ fontSize: '14px', color: '#374151' }}>{o.customer}</div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ fontSize: '13px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Users size={12} />
+                        {o.salesPerson || '-'}
+                      </div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ fontSize: '14px', color: '#64748b', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.products.join(', ')}</div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                      <div style={{ fontSize: '14px', color: '#374151' }}>{o.deliveryDate}</div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                      <span style={{ 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: '4px',
+                        padding: '4px 8px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        borderRadius: '4px',
+                        color: o.daysLeft <= 5 ? '#dc2626' : o.daysLeft <= 10 ? '#ea580c' : o.daysLeft <= 15 ? '#ca8a04' : '#16a34a',
+                        backgroundColor: o.daysLeft <= 5 ? '#fef2f2' : o.daysLeft <= 10 ? '#fff7ed' : o.daysLeft <= 15 ? '#fefce8' : '#f0fdf4'
+                      }}>
+                        <Clock size={12} />
+                        {o.daysLeft}天
+                      </span>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                      <StatusBadge level={o.level} size="sm" />
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                      <span style={{ 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        width: '24px',
+                        height: '24px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        borderRadius: '50%',
+                        color: o.affected > 0 ? '#dc2626' : '#16a34a',
+                        backgroundColor: o.affected > 0 ? '#fee2e2' : '#dcfce7'
+                      }}>
+                        {o.affected}
+                      </span>
+                    </td>
+                  </TableRow>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* 产品表格 */}
+      {activeTab === 'products' && (
+        <Card>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                  <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>产品编码</th>
+                  <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>产品名称</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>关联订单</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>总需求量</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>BOM物料</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>风险分</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProducts.map(p => (
+                  <TableRow key={p.code} onClick={() => onNav('product', p.code)}>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{p.code}</div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ fontSize: '14px', color: '#374151' }}>{p.name}</div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#3b82f6' }}>{p.orderCount}</div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>{p.totalQty.toLocaleString()}</div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#64748b' }}>{p.materialCount}</div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: p.maxScore >= 50 ? '#dc2626' : p.maxScore >= 25 ? '#ea580c' : '#16a34a' }}>
+                        {p.maxScore}
+                      </div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                      <StatusBadge level={p.level} size="sm" />
+                    </td>
+                  </TableRow>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </div>
   );
 };
 
-// ============ OrderDetail ============
+// ============ OrderDetail 订单详情页 ============
 const OrderDetail = ({ id, orders, orderLines, bom, mats, suppliers, pos, onNav, onBack }) => {
   const calcRisk = useMemo(() => createRiskCalculator(mats, pos, suppliers), [mats, pos, suppliers]);
-  
   const order = orders.find(o => o.id === id);
   
-  if (!order) return <Card><EmptyState icon="❌" text="订单不存在" /></Card>;
+  if (!order) return <Card><EmptyState icon={XCircle} title="订单不存在" description="未找到该订单信息" /></Card>;
   
   const lines = orderLines.filter(l => l.orderId === id);
   const daysLeft = daysDiff(order.deliveryDate, TODAY);
@@ -253,95 +615,125 @@ const OrderDetail = ({ id, orders, orderLines, bom, mats, suppliers, pos, onNav,
   }, [order, lines, bom, calcRisk]);
 
   return (
-    <div>
-      <BackButton onClick={onBack} />
-      <Card glow="#3b82f6" style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <Button variant="secondary" icon={ChevronLeft} onClick={onBack}>返回</Button>
+      
+      <Card>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
           <div>
-            <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}>销售订单</div>
-            <h2 style={{ margin: 0, fontSize: 34, fontWeight: 800, background: 'linear-gradient(135deg, #1e293b, #334155)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{id}</h2>
-            <div style={{ color: '#475569', fontWeight: 600, marginTop: 6, fontSize: 16 }}>{order.customer}</div>
+            <div style={{ fontSize: '11px', fontWeight: 500, color: '#64748b', marginBottom: '4px' }}>销售订单</div>
+            <h1 style={{ fontSize: '28px', fontWeight: 700, color: '#0f172a', margin: '0 0 8px 0' }}>{id}</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#64748b', marginBottom: '4px' }}>
+              <Users size={16} />
+              <span>{order.customer}</span>
+            </div>
+            {order.salesPerson && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: '#eff6ff', borderRadius: '6px', fontSize: '12px', color: '#2563eb', marginTop: '8px' }}>
+                <Users size={12} />
+                <span>业务员: {order.salesPerson}</span>
+              </div>
+            )}
           </div>
           <StatusBadge level={highestRisk(allRisks.map(r => r.level))} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
           {[
-            { label: '下单日期', value: order.orderDate, icon: '📅' },
-            { label: '交货日期', value: order.deliveryDate, icon: '🎯' },
-            { label: '剩余天数', value: <DaysTag days={daysLeft} compact />, icon: '⏱' },
-            { label: '产品种类', value: `${lines.length} 种`, icon: '📦' },
+            { label: '下单日期', value: order.orderDate, icon: Calendar },
+            { label: '交货日期', value: order.deliveryDate, icon: Truck },
+            { label: '剩余天数', value: `${daysLeft} 天`, icon: Clock },
+            { label: '产品种类', value: `${lines.length} 种`, icon: Package },
           ].map((item, i) => (
-            <div key={i} style={{ padding: 16, background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)', borderRadius: 14, textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8, fontWeight: 700 }}>{item.icon} {item.label}</div>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>{item.value}</div>
+            <div key={i} style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: '#64748b', marginBottom: '8px' }}>
+                <item.icon size={14} />
+                <span>{item.label}</span>
+              </div>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{item.value}</div>
             </div>
           ))}
         </div>
       </Card>
 
       {criticals.length > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 16 }}>🚨 关键预警物料</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 14 }}>
+        <div>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertCircle size={20} style={{ color: '#ef4444' }} />
+            关键预警物料
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
             {criticals.slice(0, 6).map((m, i) => (
-              <Card key={i} onClick={() => onNav('material', m.code)} glow={RISK[m.level].color} style={{ borderLeft: `4px solid ${RISK[m.level].color}` }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <span style={{ fontWeight: 700, fontSize: 15, color: '#1e293b' }}>{m.name}</span>
-                  <ScoreBar score={m.score} size="sm" />
+              <Card key={i} onClick={() => onNav('material', m.code)} style={{ borderLeft: `4px solid ${RISK[m.level].color}` }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>{m.name}</div>
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>{m.code}</div>
+                  </div>
+                  <StatusBadge level={m.level} size="sm" />
                 </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-                  {m.delay > 0 && <span style={{ padding: '4px 10px', borderRadius: 50, fontSize: 11, fontWeight: 700, color: '#ef4444', background: '#fef2f2' }}>延期{m.delay}天</span>}
-                  {m.gap > 0 && <span style={{ padding: '4px 10px', borderRadius: 50, fontSize: 11, fontWeight: 700, color: '#f97316', background: '#fff7ed' }}>缺口{m.gap.toLocaleString()}</span>}
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                  {m.delay > 0 && <span style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, borderRadius: '4px', color: '#dc2626', backgroundColor: '#fee2e2' }}>延期 {m.delay}天</span>}
+                  {m.gap > 0 && <span style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, borderRadius: '4px', color: '#ea580c', backgroundColor: '#ffedd5' }}>缺口 {m.gap.toLocaleString()}</span>}
                 </div>
-                <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>📦 用于: {m.productName}</div>
+                <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Box size={12} />
+                  <span>用于: {m.productName}</span>
+                </div>
               </Card>
             ))}
           </div>
         </div>
       )}
 
-      <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 16 }}>📦 订单产品</h3>
-      <Card style={{ padding: 0, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)' }}>
-              {['产品', '数量', 'BOM物料', '风险分', '状态'].map(h => (
-                <th key={h} style={{ padding: '16px 18px', textAlign: h === '产品' ? 'left' : 'center', fontWeight: 700, fontSize: 13, color: '#475569', borderBottom: '2px solid #e2e8f0' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map(l => {
-              const risks = allRisks.filter(r => r.productCode === l.productCode);
-              return (
-                <tr key={l.productCode} onClick={() => onNav('product', l.productCode)} style={{ cursor: 'pointer' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ fontWeight: 800, fontSize: 15, background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{l.productCode}</div>
-                    <div style={{ fontSize: 13, color: '#64748b', marginTop: 2, fontWeight: 600 }}>{l.productName}</div>
-                  </td>
-                  <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9', textAlign: 'center', fontWeight: 700, fontSize: 16 }}>{l.qty.toLocaleString()}</td>
-                  <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9', textAlign: 'center', color: '#64748b', fontWeight: 600 }}>{risks.length}</td>
-                  <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}><ScoreBar score={Math.max(0, ...risks.map(r => r.score))} /></td>
-                  <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}><StatusBadge level={highestRisk(risks.map(r => r.level))} size="sm" /></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <Card>
+        <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', marginBottom: '16px' }}>订单产品</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {lines.map(l => {
+            const risks = allRisks.filter(r => r.productCode === l.productCode);
+            return (
+              <div 
+                key={l.productCode}
+                onClick={() => onNav('product', l.productCode)}
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  padding: '16px',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>{l.productCode}</div>
+                  <div style={{ fontSize: '12px', color: '#64748b' }}>{l.productName}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>数量</div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{l.qty.toLocaleString()}</div>
+                  </div>
+                  <StatusBadge level={highestRisk(risks.map(r => r.level))} size="sm" />
+                  <ChevronRight size={16} style={{ color: '#94a3b8' }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </Card>
     </div>
   );
 };
 
-// ============ ProductDetail ============
+// ============ ProductDetail 产品详情页 ============
 const ProductDetail = ({ code, orders, orderLines, products, bom, mats, suppliers, pos, onNav, onBack }) => {
   const calcRisk = useMemo(() => createRiskCalculator(mats, pos, suppliers), [mats, pos, suppliers]);
-
   const product = products.find(p => p.code === code);
   
-  if (!product) return <Card><EmptyState icon="❌" text="产品不存在" /></Card>;
+  if (!product) return <Card><EmptyState icon={XCircle} title="产品不存在" description="未找到该产品信息" /></Card>;
   
   const lines = orderLines.filter(l => l.productCode === code);
   const totalDemand = lines.reduce((s, l) => s + l.qty, 0);
@@ -355,7 +747,13 @@ const ProductDetail = ({ code, orders, orderLines, products, bom, mats, supplier
       const daysLeft = daysDiff(o.deliveryDate, TODAY);
       const bomItems = bom.filter(b => b.p === code);
       const risks = bomItems.map(b => calcRisk(b.m, b.c * l.qty, o.deliveryDate)).filter(Boolean);
-      return { ...o, qty: l.qty, daysLeft, level: highestRisk(risks.map(r => r.level)), score: Math.max(0, ...risks.map(r => r.score)), gapCount: risks.filter(r => r.gap > 0).length };
+      return { 
+        ...o, 
+        qty: l.qty, 
+        daysLeft, 
+        level: highestRisk(risks.map(r => r.level)), 
+        score: Math.max(0, ...risks.map(r => r.score))
+      };
     }).filter(Boolean).sort((a, b) => a.daysLeft - b.daysLeft);
   }, [code, lines, orders, bom, calcRisk]);
 
@@ -366,97 +764,137 @@ const ProductDetail = ({ code, orders, orderLines, products, bom, mats, supplier
   }, [code, totalDemand, earliest, bom, calcRisk]);
 
   return (
-    <div>
-      <BackButton onClick={onBack} />
-      <Card glow="#3b82f6" style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <Button variant="secondary" icon={ChevronLeft} onClick={onBack}>返回</Button>
+      
+      <Card>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
           <div>
-            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700, marginBottom: 4 }}>产品信息</div>
-            <h2 style={{ margin: '0 0 8px', fontSize: 32, fontWeight: 800, background: 'linear-gradient(135deg, #1e293b, #334155)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{code}</h2>
-            <div style={{ fontSize: 18, color: '#1e293b', fontWeight: 600 }}>{product.name}</div>
+            <div style={{ fontSize: '11px', fontWeight: 500, color: '#64748b', marginBottom: '4px' }}>产品信息</div>
+            <h1 style={{ fontSize: '28px', fontWeight: 700, color: '#0f172a', margin: '0 0 8px 0' }}>{code}</h1>
+            <div style={{ fontSize: '16px', color: '#374151' }}>{product.name}</div>
           </div>
           <StatusBadge level={highestRisk(bomData.map(m => m.level))} />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 20 }}>
-          {[
-            { label: '关联订单', value: relatedOrderIds.length, icon: '📋', color: '#3b82f6' },
-            { label: '总需求量', value: totalDemand.toLocaleString(), icon: '📊', color: '#8b5cf6' },
-            { label: '最早交期', value: earliest?.deliveryDate || '-', icon: '🎯', color: '#f97316' },
-            { label: 'BOM物料', value: bomData.length, icon: '🔧', color: '#10b981' },
-          ].map((item, i) => (
-            <div key={i} style={{ padding: 16, background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)', borderRadius: 14, textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: '#64748b', marginBottom: 8, fontWeight: 700 }}>{item.icon} {item.label}</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: item.color }}>{item.value}</div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
+          <MetricCard icon={ShoppingCart} label="关联订单" value={relatedOrderIds.length} />
+          <MetricCard icon={TrendingUp} label="总需求量" value={totalDemand.toLocaleString()} />
+          <MetricCard icon={Calendar} label="最早交期" value={earliest?.deliveryDate || '-'} />
+          <MetricCard icon={Layers} label="BOM物料" value={bomData.length} />
+        </div>
+      </Card>
+
+      <Card>
+        <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', marginBottom: '16px' }}>
+          关联订单 ({relatedOrders.length})
+        </h2>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>订单号</th>
+                <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>客户</th>
+                <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>需求数量</th>
+                <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>交货日期</th>
+                <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>剩余天数</th>
+                <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>状态</th>
+              </tr>
+            </thead>
+            <tbody>
+              {relatedOrders.map(o => (
+                <TableRow key={o.id} onClick={() => onNav('order', o.id)}>
+                  <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#3b82f6' }}>{o.id}</div>
+                  </td>
+                  <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                    <div style={{ fontSize: '14px', color: '#374151' }}>{o.customer}</div>
+                  </td>
+                  <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                    <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>{o.qty.toLocaleString()}</div>
+                  </td>
+                  <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                    <div style={{ fontSize: '14px', color: '#374151' }}>{o.deliveryDate}</div>
+                  </td>
+                  <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                    <span style={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      gap: '4px',
+                      padding: '4px 8px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      borderRadius: '4px',
+                      color: o.daysLeft <= 5 ? '#dc2626' : o.daysLeft <= 10 ? '#ea580c' : o.daysLeft <= 15 ? '#ca8a04' : '#16a34a',
+                      backgroundColor: o.daysLeft <= 5 ? '#fef2f2' : o.daysLeft <= 10 ? '#fff7ed' : o.daysLeft <= 15 ? '#fefce8' : '#f0fdf4'
+                    }}>
+                      <Clock size={12} />
+                      {o.daysLeft}天
+                    </span>
+                  </td>
+                  <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                    <StatusBadge level={o.level} size="sm" />
+                  </td>
+                </TableRow>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Card>
+        <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', marginBottom: '16px' }}>BOM物料清单</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '16px' }}>
+          {bomData.map(m => (
+            <div 
+              key={m.code}
+              onClick={() => onNav('material', m.code)}
+              style={{ 
+                padding: '16px',
+                border: '1px solid #e2e8f0',
+                borderLeft: `4px solid ${RISK[m.level].color}`,
+                borderRadius: '8px',
+                cursor: 'pointer',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>{m.name}</div>
+                  <div style={{ fontSize: '11px', color: '#64748b' }}>{m.code}</div>
+                </div>
+                <StatusBadge level={m.level} size="sm" />
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '12px' }}>
+                {[
+                  { label: '需求', value: m.demand, color: '#0f172a' },
+                  { label: '库存', value: m.inv, color: m.inv < m.safe ? '#dc2626' : '#16a34a' },
+                  { label: '在途', value: m.transit, color: '#2563eb' },
+                  { label: '缺口', value: m.gap, color: m.gap > 0 ? '#dc2626' : '#16a34a' },
+                ].map((item, i) => (
+                  <div key={i} style={{ textAlign: 'center', padding: '8px', background: '#f8fafc', borderRadius: '6px' }}>
+                    <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px' }}>{item.label}</div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: item.color }}>{item.value.toLocaleString()}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {m.delay > 0 && <span style={{ padding: '4px 8px', fontSize: '10px', fontWeight: 600, borderRadius: '4px', color: '#dc2626', backgroundColor: '#fee2e2' }}>延期 {m.delay}天</span>}
+                {m.singleSource && <span style={{ padding: '4px 8px', fontSize: '10px', fontWeight: 600, borderRadius: '4px', color: '#ca8a04', backgroundColor: '#fef3c7' }}>单一来源</span>}
+              </div>
             </div>
           ))}
         </div>
       </Card>
-
-      <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 16 }}>📋 关联订单 ({relatedOrders.length})</h3>
-      <Card style={{ padding: 0, overflow: 'hidden', marginBottom: 24 }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)' }}>
-              {['订单', '客户', '需求数量', '交货日期', '剩余天数', '风险分', '状态'].map(h => (
-                <th key={h} style={{ padding: '16px 18px', textAlign: ['订单', '客户'].includes(h) ? 'left' : 'center', fontWeight: 700, fontSize: 13, color: '#475569', borderBottom: '2px solid #e2e8f0' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {relatedOrders.map(o => (
-              <tr key={o.id} onClick={() => onNav('order', o.id)} style={{ cursor: 'pointer' }}
-                onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9' }}><span style={{ fontWeight: 800, fontSize: 15, background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>{o.id}</span></td>
-                <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9', fontWeight: 600 }}>{o.customer}</td>
-                <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9', textAlign: 'center', fontWeight: 700, fontSize: 16 }}>{o.qty.toLocaleString()}</td>
-                <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9', textAlign: 'center', fontWeight: 600 }}>{o.deliveryDate}</td>
-                <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}><DaysTag days={o.daysLeft} /></td>
-                <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}><ScoreBar score={o.score} /></td>
-                <td style={{ padding: 18, borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}><StatusBadge level={o.level} size="sm" /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-
-      <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 16 }}>🔧 BOM物料 ({bomData.length})</h3>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
-        {bomData.map(m => (
-          <Card key={m.code} onClick={() => onNav('material', m.code)} glow={RISK[m.level]?.color} style={{ borderLeft: `4px solid ${RISK[m.level].color}` }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 700, color: '#1e293b' }}>{m.name}</div>
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, fontWeight: 600 }}>{m.code}</div>
-              </div>
-              <ScoreBar score={m.score} size="sm" />
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
-              {[
-                { label: '需求', value: m.demand, color: '#1e293b' },
-                { label: '库存', value: m.inv, color: m.inv < m.safe ? '#ef4444' : '#10b981' },
-                { label: '在途', value: m.transit, color: '#3b82f6' },
-                { label: '缺口', value: m.gap, color: m.gap > 0 ? '#ef4444' : '#10b981' },
-              ].map((item, i) => (
-                <div key={i} style={{ textAlign: 'center', padding: 8, background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)', borderRadius: 10 }}>
-                  <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, marginBottom: 2 }}>{item.label}</div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: item.color }}>{item.value.toLocaleString()}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {m.delay > 0 && <span style={{ padding: '4px 10px', borderRadius: 50, fontSize: 11, fontWeight: 700, color: '#ef4444', background: '#fef2f2' }}>🕐 延期{m.delay}天</span>}
-              {m.singleSource && <span style={{ padding: '4px 10px', borderRadius: 50, fontSize: 11, fontWeight: 700, color: '#f59e0b', background: '#fffbeb' }}>⚠️ 单一来源</span>}
-              {m.poCoverage < 1 && <span style={{ padding: '4px 10px', borderRadius: 50, fontSize: 11, fontWeight: 700, color: '#8b5cf6', background: '#f5f3ff' }}>📋 PO {(m.poCoverage*100).toFixed(0)}%</span>}
-            </div>
-          </Card>
-        ))}
-      </div>
     </div>
   );
 };
 
-// ============ MaterialDetail ============
+// ============ MaterialDetail 物料详情页 ============
 const MaterialDetail = ({ code, orders, orderLines, bom, mats, suppliers, pos, onBack }) => {
   const calcRisk = useMemo(() => createRiskCalculator(mats, pos, suppliers), [mats, pos, suppliers]);
   
@@ -481,119 +919,191 @@ const MaterialDetail = ({ code, orders, orderLines, bom, mats, suppliers, pos, o
   const totalDemand = affected.reduce((s, o) => s + o.demand, 0);
   const totalGap = Math.max(0, totalDemand - mat.inv - mat.transit);
 
-  if (!mat) return <Card><EmptyState icon="❌" text="物料不存在" /></Card>;
+  if (!mat) return <Card><EmptyState icon={XCircle} title="物料不存在" description="未找到该物料信息" /></Card>;
 
   return (
-    <div>
-      <BackButton onClick={onBack} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginBottom: 24 }}>
-        <Card glow="#3b82f6">
-          <h3 style={{ margin: '0 0 18px', fontSize: 15, fontWeight: 700 }}>📦 物料信息</h3>
-          <div style={{ display: 'grid', gap: 14 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <Button variant="secondary" icon={ChevronLeft} onClick={onBack}>返回</Button>
+      
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+        <Card>
+          <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Box size={18} />
+            物料信息
+          </h3>
+          {mat.buyer && (
+            <div style={{ marginBottom: '16px', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 12px', background: '#eff6ff', borderRadius: '6px', fontSize: '12px', color: '#2563eb' }}>
+              <Users size={12} />
+              <span>采购员: {mat.buyer}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             {[
-              { label: '编码', value: mat.code },
-              { label: '名称', value: mat.name },
-              { label: '规格', value: mat.spec },
+              { label: '物料编码', value: mat.code },
+              { label: '物料名称', value: mat.name },
+              { label: '规格型号', value: mat.spec },
               { label: '单价', value: `¥${mat.price}/${mat.unit}` },
               { label: '提前期', value: `${mat.lead} 天` },
             ].map((item, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: '#f8fafc', borderRadius: 10 }}>
-                <span style={{ color: '#475569', fontSize: 13, fontWeight: 600 }}>{item.label}</span>
-                <span style={{ fontWeight: 700, fontSize: 14, color: '#1e293b' }}>{item.value}</span>
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: i < 4 ? '1px solid #f1f5f9' : 'none' }}>
+                <span style={{ fontSize: '13px', color: '#64748b' }}>{item.label}</span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>{item.value}</span>
               </div>
             ))}
           </div>
         </Card>
 
-        <GlassCard color="#10b981">
-          <h3 style={{ margin: '0 0 18px', fontSize: 15, fontWeight: 700 }}>📊 库存状态</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            {[
-              { label: '当前库存', value: mat.inv, color: mat.inv < mat.safe ? '#ef4444' : '#10b981' },
-              { label: '安全库存', value: mat.safe, color: '#64748b' },
-              { label: '在途数量', value: mat.transit, color: '#3b82f6' },
-              { label: '总缺口', value: totalGap, color: totalGap > 0 ? '#ef4444' : '#10b981' },
-            ].map((item, i) => (
-              <div key={i} style={{ padding: 14, background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)', borderRadius: 14, textAlign: 'center' }}>
-                <div style={{ fontSize: 12, color: '#475569', fontWeight: 700, marginBottom: 6 }}>{item.label}</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: item.color }}>{item.value.toLocaleString()}</div>
+        <Card style={{ background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', border: '1px solid #86efac' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Package size={18} />
+            库存状态
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ padding: '16px', background: '#fff', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+              <div style={{ fontSize: '11px', color: '#16a34a', marginBottom: '4px' }}>当前库存</div>
+              <div style={{ fontSize: '32px', fontWeight: 800, color: mat.inv < mat.safe ? '#dc2626' : '#16a34a' }}>
+                {mat.inv.toLocaleString()}
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+              {[
+                { label: '安全库存', value: mat.safe, color: '#64748b' },
+                { label: '在途数量', value: mat.transit, color: '#2563eb' },
+                { label: '总缺口', value: totalGap, color: totalGap > 0 ? '#dc2626' : '#16a34a' },
+              ].map((item, i) => (
+                <div key={i} style={{ textAlign: 'center', padding: '12px', background: '#fff', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                  <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px' }}>{item.label}</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: item.color }}>{item.value.toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+
+        <Card style={{ background: 'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)', border: '1px solid #c4b5fd' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Factory size={18} />
+            供应商
+          </h3>
+          {mat.suppliers === 1 && (
+            <div style={{ marginBottom: '12px', padding: '8px 12px', background: '#fef3c7', border: '1px solid #fde047', borderRadius: '6px', fontSize: '12px', color: '#854d0e', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <AlertTriangle size={14} />
+              <span>单一来源风险</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {matSuppliers.map(s => (
+              <div key={s.id} style={{ padding: '12px', background: '#fff', borderRadius: '8px', border: '1px solid #ddd6fe' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>{s.name}</span>
+                  {s.main && <span style={{ padding: '2px 8px', background: '#3b82f6', color: '#fff', fontSize: '10px', fontWeight: 600, borderRadius: '4px' }}>主供</span>}
+                </div>
+                <div style={{ display: 'flex', gap: '12px', fontSize: '11px' }}>
+                  <span style={{ color: s.onTime < 0.85 ? '#dc2626' : '#16a34a', fontWeight: 600 }}>
+                    准时率 {(s.onTime*100).toFixed(0)}%
+                  </span>
+                  <span style={{ color: '#64748b', fontWeight: 600 }}>质量 {(s.quality*100).toFixed(0)}%</span>
+                </div>
               </div>
             ))}
           </div>
-        </GlassCard>
-
-        <GlassCard color="#8b5cf6">
-          <h3 style={{ margin: '0 0 18px', fontSize: 15, fontWeight: 700 }}>🏭 供应商</h3>
-          {mat.suppliers === 1 && <div style={{ padding: 12, background: 'linear-gradient(135deg, #fffbeb, #fef3c7)', borderRadius: 12, marginBottom: 14, fontSize: 13, color: '#b45309', fontWeight: 600 }}>⚠️ 单一来源风险</div>}
-          {matSuppliers.map(s => (
-            <div key={s.id} style={{ padding: 14, background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)', borderRadius: 12, marginBottom: 10 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontWeight: 700, fontSize: 14, color: '#1e293b' }}>{s.name}</span>
-                {s.main && <span style={{ fontSize: 10, padding: '4px 10px', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', borderRadius: 50, fontWeight: 700 }}>主供</span>}
-              </div>
-              <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
-                <span style={{ color: s.onTime < 0.85 ? '#ef4444' : '#10b981', fontWeight: 600 }}>准时率 {(s.onTime*100).toFixed(0)}%</span>
-                <span style={{ color: '#475569', fontWeight: 600 }}>质量 {(s.quality*100).toFixed(0)}%</span>
-              </div>
-            </div>
-          ))}
-        </GlassCard>
+        </Card>
       </div>
 
-      <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 16 }}>📋 采购订单</h3>
-      {matPOs.length === 0 ? <Card><EmptyState icon="📭" text="暂无采购订单" /></Card> : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 14, marginBottom: 24 }}>
-          {matPOs.map(p => {
-            const st = { arrived: { bg: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', color: '#10b981', text: '已到货' }, shipped: { bg: 'linear-gradient(135deg, #eff6ff, #dbeafe)', color: '#3b82f6', text: '已发货' }, producing: { bg: 'linear-gradient(135deg, #fff7ed, #ffedd5)', color: '#f97316', text: '生产中' }, confirmed: { bg: 'linear-gradient(135deg, #f8fafc, #f1f5f9)', color: '#64748b', text: '已确认' } }[p.status];
-            return (
-              <Card key={p.po} style={{ background: st.bg }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <span style={{ fontWeight: 800, fontSize: 15 }}>{p.po}</span>
-                  <span style={{ fontSize: 11, padding: '5px 12px', background: st.color, color: '#fff', borderRadius: 50, fontWeight: 700 }}>{st.text}</span>
+      <Card>
+        <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', marginBottom: '16px' }}>采购订单</h3>
+        {matPOs.length === 0 ? (
+          <EmptyState icon={ShoppingCart} title="暂无采购订单" description="该物料尚未下单采购" />
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
+            {matPOs.map(p => {
+              const statusConfig = {
+                arrived: { bg: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', color: '#16a34a', text: '已到货' },
+                shipped: { bg: 'linear-gradient(135deg, #eff6ff, #dbeafe)', color: '#2563eb', text: '已发货' },
+                producing: { bg: 'linear-gradient(135deg, #fff7ed, #ffedd5)', color: '#ea580c', text: '生产中' },
+                confirmed: { bg: 'linear-gradient(135deg, #f8fafc, #f1f5f9)', color: '#64748b', text: '已确认' }
+              }[p.status];
+              
+              return (
+                <div key={p.po} style={{ padding: '16px', background: statusConfig.bg, border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>{p.po}</span>
+                    <span style={{ padding: '4px 8px', fontSize: '10px', fontWeight: 600, borderRadius: '4px', color: '#fff', backgroundColor: statusConfig.color }}>
+                      {statusConfig.text}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '8px' }}>{p.supplier}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', marginBottom: '8px' }}>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#64748b' }}>数量</div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{p.qty.toLocaleString()} {mat.unit}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '11px', color: '#64748b' }}>金额</div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>¥{p.amt.toLocaleString()}</div>
+                    </div>
+                  </div>
+                  <div style={{ paddingTop: '8px', borderTop: '1px solid rgba(0,0,0,0.05)', fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Calendar size={12} />
+                    <span>交期: {p.date}</span>
+                  </div>
                 </div>
-                <div style={{ fontSize: 13, color: '#475569', marginBottom: 8, fontWeight: 600 }}>{p.supplier}</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                  <span style={{ fontWeight: 600 }}>{p.qty.toLocaleString()} {mat.unit}</span>
-                  <span style={{ fontWeight: 800, color: '#1e293b' }}>¥{p.amt.toLocaleString()}</span>
-                </div>
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 8, fontWeight: 600 }}>📅 交期: {p.date}</div>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </Card>
 
-      <h3 style={{ fontSize: 17, fontWeight: 800, marginBottom: 16 }}>⚠️ 受影响订单</h3>
-      <Card style={{ padding: 0, overflow: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)' }}>
-              {['订单', '客户', '产品', '订单量', '物料需求', '交期', '剩余', '状态'].map(h => (
-                <th key={h} style={{ padding: '14px 16px', textAlign: 'left', fontWeight: 700, fontSize: 13, color: '#475569', borderBottom: '2px solid #e2e8f0' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {affected.map((o, i) => (
-              <tr key={i}>
-                <td style={{ padding: 16, borderBottom: '1px solid #f1f5f9' }}><span style={{ fontWeight: 800, color: '#3b82f6' }}>{o.id}</span></td>
-                <td style={{ padding: 16, borderBottom: '1px solid #f1f5f9', fontWeight: 600 }}>{o.customer}</td>
-                <td style={{ padding: 16, borderBottom: '1px solid #f1f5f9' }}>{o.productName}</td>
-                <td style={{ padding: 16, borderBottom: '1px solid #f1f5f9', fontWeight: 600 }}>{o.qty.toLocaleString()}</td>
-                <td style={{ padding: 16, borderBottom: '1px solid #f1f5f9', fontWeight: 700 }}>{o.demand.toLocaleString()}</td>
-                <td style={{ padding: 16, borderBottom: '1px solid #f1f5f9' }}>{o.deliveryDate}</td>
-                <td style={{ padding: 16, borderBottom: '1px solid #f1f5f9' }}><DaysTag days={o.daysLeft} compact /></td>
-                <td style={{ padding: 16, borderBottom: '1px solid #f1f5f9' }}><StatusBadge level={o.level} size="sm" /></td>
+      <Card>
+        <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', marginBottom: '16px' }}>受影响订单</h3>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                {['订单号', '客户', '产品', '需求量', '交期', '剩余', '状态'].map(h => (
+                  <th key={h} style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {affected.map((o, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#3b82f6' }}>{o.id}</td>
+                  <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{o.customer}</td>
+                  <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{o.productName}</td>
+                  <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{o.demand.toLocaleString()}</td>
+                  <td style={{ padding: '16px' }}>
+                    <div style={{ fontSize: '14px', color: '#374151' }}>{o.deliveryDate}</div>
+                  </td>
+                  <td style={{ padding: '16px' }}>
+                    <span style={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      gap: '4px',
+                      padding: '4px 8px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      borderRadius: '4px',
+                      color: o.daysLeft <= 5 ? '#dc2626' : o.daysLeft <= 10 ? '#ea580c' : '#16a34a',
+                      backgroundColor: o.daysLeft <= 5 ? '#fee2e2' : o.daysLeft <= 10 ? '#ffedd5' : '#dcfce7'
+                    }}>
+                      {o.daysLeft} 天
+                    </span>
+                  </td>
+                  <td style={{ padding: '16px' }}>
+                    <StatusBadge level={o.level} size="sm" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </div>
   );
 };
 
-// ============ WarningsPage ============
+// ============ WarningsPage 预警页面 ============
 const WarningsPage = ({ onBack }) => {
   const [filter, setFilter] = useState('all');
   const [warnings, setWarnings] = useState([]);
@@ -602,54 +1112,35 @@ const WarningsPage = ({ onBack }) => {
 
   useEffect(() => {
     let cancelled = false;
-
     const fetchWarnings = async () => {
       setLoading(true);
       setError(null);
-
       try {
         const res = await fetch(`${BASE_URL}/api/warnings`);
-
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-        }
-
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const result = await res.json();
-
         const levelOrder = { RED: 1, ORANGE: 2, YELLOW: 3, BLUE: 4 };
         const sorted = [...result].sort((a, b) => {
           const levelDiff = (levelOrder[a.level] || 99) - (levelOrder[b.level] || 99);
           if (levelDiff !== 0) return levelDiff;
           return new Date(a.dueDate) - new Date(b.dueDate);
         });
-
-        if (!cancelled) {
-          setWarnings(sorted);
-        }
+        if (!cancelled) setWarnings(sorted);
       } catch (err) {
-        console.error('Failed to fetch warnings:', err);
-        if (!cancelled) {
-          setError(err.message || '获取预警数据失败');
-        }
+        if (!cancelled) setError(err.message);
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     };
-
     fetchWarnings();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   const levelConfig = {
-    RED: { color: '#ef4444', bg: '#fef2f2', text: '严重', icon: '🔴' },
-    ORANGE: { color: '#f97316', bg: '#fff7ed', text: '紧急', icon: '🟠' },
-    YELLOW: { color: '#eab308', bg: '#fefce8', text: '预警', icon: '🟡' },
-    BLUE: { color: '#3b82f6', bg: '#eff6ff', text: '关注', icon: '🔵' },
+    RED: { color: '#ef4444', bg: '#fef2f2', text: '严重', icon: XCircle },
+    ORANGE: { color: '#f97316', bg: '#fff7ed', text: '紧急', icon: AlertOctagon },
+    YELLOW: { color: '#f59e0b', bg: '#fffbeb', text: '预警', icon: AlertTriangle },
+    BLUE: { color: '#3b82f6', bg: '#eff6ff', text: '关注', icon: AlertCircle },
   };
 
   const filtered = filter === 'all' ? warnings : warnings.filter(w => w.level === filter);
@@ -660,124 +1151,135 @@ const WarningsPage = ({ onBack }) => {
     BLUE: warnings.filter(w => w.level === 'BLUE').length,
   };
 
-  if (loading) {
-    return (
-      <div data-page="warnings-loading">
-        <BackButton onClick={onBack} />
-        <Card><EmptyState icon="⏳" text="加载预警数据中..." /></Card>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div data-page="warnings-error">
-        <BackButton onClick={onBack} />
-        <Card>
-          <EmptyState icon="⚠️" text={error} />
-          <div style={{ textAlign: 'center', marginTop: 20 }}>
-            <button onClick={() => window.location.reload()} style={{ padding: '12px 24px', borderRadius: 12, border: 'none', background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>重新加载</button>
-          </div>
-        </Card>
-      </div>
-    );
-  }
+  if (loading) return <div style={{ padding: '32px' }}><Card><EmptyState icon={Clock} title="加载中" description="正在获取预警数据..." /></Card></div>;
+  if (error) return <ErrorScreen error={error} onRetry={() => window.location.reload()} />;
 
   return (
-    <div data-page="warnings">
-      <BackButton onClick={onBack} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <Button variant="secondary" icon={ChevronLeft} onClick={onBack}>返回</Button>
       
-      <Card style={{ marginBottom: 24 }}>
-        <h2 style={{ margin: '0 0 20px', fontSize: 28, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ width: 48, height: 48, borderRadius: 12, background: 'linear-gradient(135deg, #ef4444, #dc2626)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, boxShadow: '0 4px 16px rgba(239,68,68,0.4)' }}>⚠️</span>
-          库存预警总览
-        </h2>
-        
-        <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
-          <StatCard icon="🔴" label="严重" value={stats.RED} sub="立即处理" color="#ef4444" />
-          <StatCard icon="🟠" label="紧急" value={stats.ORANGE} sub="优先关注" color="#f97316" />
-          <StatCard icon="🟡" label="预警" value={stats.YELLOW} sub="提前准备" color="#eab308" />
-          <StatCard icon="🔵" label="关注" value={stats.BLUE} sub="持续跟踪" color="#3b82f6" />
+      <Card>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+          <div style={{ width: '48px', height: '48px', background: '#fee2e2', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <AlertCircle size={24} style={{ color: '#ef4444' }} />
+          </div>
+          <div>
+            <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a', margin: 0 }}>库存预警</h1>
+            <p style={{ fontSize: '14px', color: '#64748b', margin: '4px 0 0 0' }}>物料短缺与供应链告警</p>
+          </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, background: '#f1f5f9', borderRadius: 14, padding: 4, flexWrap: 'wrap' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+          <MetricCard icon={XCircle} label="严重" value={stats.RED} />
+          <MetricCard icon={AlertOctagon} label="紧急" value={stats.ORANGE} />
+          <MetricCard icon={AlertTriangle} label="预警" value={stats.YELLOW} />
+          <MetricCard icon={AlertCircle} label="关注" value={stats.BLUE} />
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', overflowX: 'auto' }}>
           {[
             { k: 'all', l: '全部', c: warnings.length },
-            { k: 'RED', l: '🔴 严重', c: stats.RED },
-            { k: 'ORANGE', l: '🟠 紧急', c: stats.ORANGE },
-            { k: 'YELLOW', l: '🟡 预警', c: stats.YELLOW },
-            { k: 'BLUE', l: '🔵 关注', c: stats.BLUE },
+            { k: 'RED', l: '严重', c: stats.RED },
+            { k: 'ORANGE', l: '紧急', c: stats.ORANGE },
+            { k: 'YELLOW', l: '预警', c: stats.YELLOW },
+            { k: 'BLUE', l: '关注', c: stats.BLUE },
           ].map(v => (
-            <button key={v.k} onClick={() => setFilter(v.k)} style={{
-              flex: 1, minWidth: 100, padding: '12px 16px', border: 'none', borderRadius: 11, cursor: 'pointer',
-              fontWeight: 700, fontSize: 14,
-              background: filter === v.k ? 'linear-gradient(135deg, #3b82f6, #1d4ed8)' : 'transparent',
-              color: filter === v.k ? '#fff' : '#64748b',
-              boxShadow: filter === v.k ? '0 4px 16px rgba(59,130,246,0.4)' : 'none',
-              whiteSpace: 'nowrap', transition: 'all 0.2s'
-            }}>
+            <button
+              key={v.k}
+              onClick={() => setFilter(v.k)}
+              style={{ 
+                padding: '8px 16px',
+                fontSize: '14px',
+                fontWeight: 600,
+                borderRadius: '8px',
+                border: 'none',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.2s',
+                background: filter === v.k ? '#3b82f6' : '#f1f5f9',
+                color: filter === v.k ? '#fff' : '#374151'
+              }}
+            >
               {v.l} ({v.c})
             </button>
           ))}
         </div>
+
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1000px' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                {['等级', '物料编码', '物料名称', '所属产品', '库存', '需求', '交期', '供应商'].map(h => (
+                  <th key={h} style={{ 
+                    textAlign: ['等级', '物料编码', '物料名称', '所属产品', '供应商'].includes(h) ? 'left' : 'center',
+                    padding: '12px 16px', 
+                    fontSize: '11px', 
+                    fontWeight: 600, 
+                    color: '#64748b', 
+                    textTransform: 'uppercase' 
+                  }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((w, idx) => {
+                const cfg = levelConfig[w.level];
+                const Icon = cfg.icon;
+                return (
+                  <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '16px' }}>
+                      <span style={{ 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: '6px',
+                        padding: '6px 12px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        borderRadius: '4px',
+                        color: cfg.color,
+                        backgroundColor: cfg.bg
+                      }}>
+                        <Icon size={12} />
+                        {cfg.text}
+                      </span>
+                    </td>
+                    <td style={{ padding: '16px', fontFamily: 'monospace', fontSize: '13px', color: '#0f172a' }}>{w.itemCode}</td>
+                    <td style={{ padding: '16px', fontSize: '14px', fontWeight: 500, color: '#0f172a' }}>{w.itemName}</td>
+                    <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{w.productName || '-'}</td>
+                    <td style={{ padding: '16px', textAlign: 'center' }}>
+                      <span style={{ 
+                        fontSize: '14px', 
+                        fontWeight: 600,
+                        color: w.stockQty < w.safetyStock ? '#dc2626' : '#16a34a'
+                      }}>
+                        {w.stockQty.toLocaleString()}
+                      </span>
+                    </td>
+                    <td style={{ padding: '16px', textAlign: 'center', fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{w.demandQty.toLocaleString()}</td>
+                    <td style={{ padding: '16px', textAlign: 'center', fontSize: '14px', color: '#374151' }}>{w.dueDate}</td>
+                    <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{w.supplier || '-'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
-      <Card style={{ padding: 0, overflow: 'auto' }}>
-        <table id="warnings-table" style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1000 }}>
-          <thead>
-            <tr style={{ background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)' }}>
-              {['预警等级', '物料编码', '物料名称', '所属产品', '订单号', '当前库存', '需求数量', '安全库存', '订单交期', '供应商'].map(h => (
-                <th key={h} style={{ padding: '16px 14px', textAlign: ['预警等级', '物料编码', '物料名称', '所属产品', '订单号', '供应商'].includes(h) ? 'left' : 'center', fontWeight: 700, fontSize: 13, color: '#475569', borderBottom: '2px solid #e2e8f0', whiteSpace: 'nowrap' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((w, idx) => {
-              const cfg = levelConfig[w.level];
-              const stockStatus = w.stockQty < w.safetyStock ? 'low' : 'normal';
-              
-              return (
-                <tr key={idx} data-warning-level={w.level} data-item-code={w.itemCode} data-order-id={w.orderId}
-                  style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? '#ffffff' : '#fafbfc' }}>
-                  <td style={{ padding: '16px 14px' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 50, background: cfg.bg, color: cfg.color, fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap' }}>
-                      <span>{cfg.icon}</span><span>{cfg.text}</span>
-                    </span>
-                  </td>
-                  <td style={{ padding: '16px 14px', fontWeight: 700, color: '#3b82f6', fontFamily: 'monospace' }}>{w.itemCode}</td>
-                  <td style={{ padding: '16px 14px', fontWeight: 600, color: '#1e293b' }}>{w.itemName}</td>
-                  <td style={{ padding: '16px 14px', color: '#64748b', fontWeight: 600 }}>{w.productName || '-'}</td>
-                  <td style={{ padding: '16px 14px', fontWeight: 600, color: '#1e293b' }}>{w.orderId || '-'}</td>
-                  <td style={{ padding: '16px 14px', textAlign: 'center' }}>
-                    <span style={{ fontWeight: 800, fontSize: 15, color: stockStatus === 'low' ? '#ef4444' : '#10b981', padding: '4px 12px', borderRadius: 8, background: stockStatus === 'low' ? '#fef2f2' : '#ecfdf5' }}>
-                      {w.stockQty.toLocaleString()}
-                    </span>
-                  </td>
-                  <td style={{ padding: '16px 14px', textAlign: 'center', fontWeight: 700, fontSize: 15 }}>{w.demandQty.toLocaleString()}</td>
-                  <td style={{ padding: '16px 14px', textAlign: 'center', fontWeight: 600, color: '#64748b' }}>{w.safetyStock.toLocaleString()}</td>
-                  <td style={{ padding: '16px 14px', textAlign: 'center', fontWeight: 600, color: '#1e293b' }}>{w.dueDate}</td>
-                  <td style={{ padding: '16px 14px', color: '#1e293b', fontWeight: 600 }}>{w.supplier || '-'}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </Card>
-
-      <Card style={{ marginTop: 20, background: 'linear-gradient(135deg, #eff6ff, #dbeafe)' }}>
-        <div style={{ fontSize: 14, color: '#1e293b', fontWeight: 600 }}>
-          📊 共检测到 <strong style={{ color: '#1e293b', fontSize: 18 }}>{warnings.length}</strong> 个预警项目，
-          其中严重 <strong style={{ color: '#ef4444', fontSize: 16 }}>{stats.RED}</strong> 个，
-          紧急 <strong style={{ color: '#f97316', fontSize: 16 }}>{stats.ORANGE}</strong> 个，
-          预警 <strong style={{ color: '#eab308', fontSize: 16 }}>{stats.YELLOW}</strong> 个，
-          关注 <strong style={{ color: '#3b82f6', fontSize: 16 }}>{stats.BLUE}</strong> 个
+      <Card style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
+        <div style={{ fontSize: '14px', color: '#1e293b' }}>
+          <strong style={{ color: '#0f172a' }}>{warnings.length}</strong> 个预警项目：
+          <strong style={{ color: '#dc2626', marginLeft: '8px' }}>{stats.RED}</strong> 严重，
+          <strong style={{ color: '#ea580c', marginLeft: '8px' }}>{stats.ORANGE}</strong> 紧急，
+          <strong style={{ color: '#ca8a04', marginLeft: '8px' }}>{stats.YELLOW}</strong> 预警，
+          <strong style={{ color: '#2563eb', marginLeft: '8px' }}>{stats.BLUE}</strong> 关注
         </div>
       </Card>
     </div>
   );
 };
 
-// ============ App ============
+// ============ 主应用 ============
 export default function App() {
   const [page, setPage] = useState({ type: 'dashboard', data: null });
   const [history, setHistory] = useState([]);
@@ -785,42 +1287,75 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const nav = useCallback((type, data) => { setHistory(h => [...h, page]); setPage({ type, data }); }, [page]);
-  const back = useCallback(() => { if (history.length) { setPage(history[history.length - 1]); setHistory(h => h.slice(0, -1)); } }, [history]);
+  const nav = useCallback((type, data) => { 
+    setHistory(h => [...h, page]); 
+    setPage({ type, data });
+    const url = type === 'dashboard' ? '/' : `/${type}/${data || ''}`;
+    window.history.pushState({ type, data }, '', url);
+  }, [page]);
+
+  const back = useCallback(() => { 
+    if (history.length) { 
+      const prevPage = history[history.length - 1];
+      setPage(prevPage); 
+      setHistory(h => h.slice(0, -1));
+      const url = prevPage.type === 'dashboard' ? '/' : `/${prevPage.type}/${prevPage.data || ''}`;
+      window.history.pushState(prevPage, '', url);
+    } 
+  }, [history]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const response = await fetch(`${BASE_URL}/api/data`);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const result = await response.json();
       setData(result);
     } catch (err) {
-      console.error('Failed to fetch data:', err);
-      setError(err.message || '网络请求失败，请检查后端服务是否运行');
+      setError(err.message || '网络请求失败');
     } finally {
       setLoading(false);
     }
   }, []);
 
+  useEffect(() => { fetchData(); }, [fetchData]);
+
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && history.length > 0) {
+        back();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [history, back]);
 
-  if (loading) {
-    return <LoadingScreen />;
-  }
+  useEffect(() => {
+    const handlePopState = (e) => {
+      if (e.state) {
+        setPage(e.state);
+        setHistory([]);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
-  if (error) {
-    return <ErrorScreen error={error} onRetry={fetchData} />;
-  }
+  useEffect(() => {
+    const path = window.location.pathname;
+    const match = path.match(/^\/(order|product|material|warnings)\/(.+)$/);
+    if (match) {
+      const [, type, data] = match;
+      setPage({ type, data });
+    } else if (path === '/warnings') {
+      setPage({ type: 'warnings', data: null });
+    }
+  }, []);
 
-  if (!data) {
-    return <ErrorScreen error="未获取到数据" onRetry={fetchData} />;
-  }
+  if (loading) return <LoadingScreen />;
+  if (error) return <ErrorScreen error={error} onRetry={fetchData} />;
+  if (!data) return <ErrorScreen error="未获取到数据" onRetry={fetchData} />;
 
   const sharedProps = {
     orders: data.orders || [],
@@ -833,50 +1368,70 @@ export default function App() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 50%, #cbd5e1 100%)' }}>
-      <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%)', color: '#fff', padding: '18px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 4px 30px rgba(0,0,0,0.2)', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div onClick={() => { setPage({ type: 'dashboard', data: null }); setHistory([]); }} style={{ width: 48, height: 48, background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, boxShadow: '0 4px 16px rgba(59,130,246,0.4)', cursor: 'pointer', transition: 'transform 0.2s' }}
-            onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
-            onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>🏭</div>
-          <div>
-            <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: '-0.5px' }}>供应链预警中心</div>
-            <div style={{ fontSize: 12, opacity: 0.6, marginTop: 2 }}>Supply Chain Risk Dashboard</div>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          {page.type === 'dashboard' && (
-            <button onClick={() => nav('warnings', null)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px', background: 'linear-gradient(135deg, #ef4444, #dc2626)', border: 'none', borderRadius: 12, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 16px rgba(239,68,68,0.4)', transition: 'all 0.2s' }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(239,68,68,0.5)'; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(239,68,68,0.4)'; }}>
-              <span style={{ fontSize: 18 }}>⚠️</span><span>库存预警</span>
-            </button>
-          )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 8, height: 8, background: '#10b981', borderRadius: '50%', boxShadow: '0 0 10px #10b981' }} />
-            <span style={{ fontSize: 12, opacity: 0.8, fontWeight: 500 }}>实时同步</span>
-          </div>
-          <div style={{ fontSize: 14, background: 'rgba(255,255,255,0.1)', padding: '10px 18px', borderRadius: 12, fontWeight: 600, backdropFilter: 'blur(10px)', border: '1px solid rgba(255,255,255,0.1)' }}>
-            📅 {new Date().toLocaleDateString('zh-CN')}
-          </div>
-        </div>
-      </div>
+    <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
+      <header style={{ 
+        position: 'sticky', 
+        top: 0, 
+        zIndex: 100, 
+        background: '#fff', 
+        borderBottom: '1px solid #e2e8f0',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+      }}>
+        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '16px 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div 
+              onClick={() => { setPage({ type: 'dashboard', data: null }); setHistory([]); }}
+              style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
+            >
+              <div style={{ width: '40px', height: '40px', background: '#3b82f6', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Factory size={20} style={{ color: '#fff' }} />
+              </div>
+              <div>
+                <h1 style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', margin: 0 }}>供应链控制中心</h1>
+                <p style={{ fontSize: '11px', color: '#64748b', margin: '2px 0 0 0' }}>企业风险管理系统</p>
+              </div>
+            </div>
 
-      <div style={{ maxWidth: '95%', width: '100%', margin: '0 auto', padding: 28 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              {history.length > 0 && (
+                <div style={{ fontSize: '11px', color: '#64748b', padding: '6px 10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                  按 <kbd style={{ padding: '2px 6px', background: '#fff', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>ESC</kbd> 返回
+                </div>
+              )}
+              {page.type === 'dashboard' && (
+                <Button variant="danger" icon={AlertCircle} onClick={() => nav('warnings', null)}>
+                  库存预警
+                </Button>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: '#f8fafc', borderRadius: '8px' }}>
+                <div style={{ width: '8px', height: '8px', background: '#10b981', borderRadius: '50%', animation: 'pulse 2s infinite' }} />
+                <span style={{ fontSize: '11px', fontWeight: 500, color: '#64748b' }}>实时</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main style={{ maxWidth: '1280px', margin: '0 auto', padding: '32px 24px' }}>
         {page.type === 'dashboard' && <Dashboard {...sharedProps} onNav={nav} />}
         {page.type === 'order' && <OrderDetail {...sharedProps} id={page.data} onNav={nav} onBack={back} />}
         {page.type === 'product' && <ProductDetail {...sharedProps} code={page.data} onNav={nav} onBack={back} />}
         {page.type === 'material' && <MaterialDetail {...sharedProps} code={page.data} onBack={back} />}
         {page.type === 'warnings' && <WarningsPage onBack={back} />}
-      </div>
+      </main>
 
       <style>{`
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { margin: 0; font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb { background: linear-gradient(135deg, #cbd5e1, #94a3b8); border-radius: 4px; }
-        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.8; transform: scale(1.05); } }
+        * { box-sizing: border-box; }
+        body { 
+          margin: 0; 
+          font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display', system-ui, sans-serif;
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+        }
+        @keyframes pulse { 
+          0%, 100% { opacity: 1; } 
+          50% { opacity: 0.5; } 
+        }
       `}</style>
     </div>
   );
