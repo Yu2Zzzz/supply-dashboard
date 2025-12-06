@@ -1104,11 +1104,16 @@ const MaterialDetail = ({ code, orders, orderLines, bom, mats, suppliers, pos, o
 };
 
 // ============ WarningsPage 预警页面 ============
-const WarningsPage = ({ onBack }) => {
-  const [filter, setFilter] = useState('all');
+const WarningsPage = ({ onBack, mats }) => {
+  const [levelFilter, setLevelFilter] = useState('all');
+  const [buyerFilter, setBuyerFilter] = useState('all');
   const [warnings, setWarnings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showFilters, setShowFilters] = useState(false);
+
+  // 创建物料映射，用于获取采购员信息
+  const matMap = useMemo(() => Object.fromEntries(mats.map(m => [m.code, m])), [mats]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1136,6 +1141,9 @@ const WarningsPage = ({ onBack }) => {
     return () => { cancelled = true; };
   }, []);
 
+  // 获取所有采购员列表
+  const buyers = useMemo(() => [...new Set(mats.map(m => m.buyer).filter(Boolean))], [mats]);
+
   const levelConfig = {
     RED: { color: '#ef4444', bg: '#fef2f2', text: '严重', icon: XCircle },
     ORANGE: { color: '#f97316', bg: '#fff7ed', text: '紧急', icon: AlertOctagon },
@@ -1143,13 +1151,34 @@ const WarningsPage = ({ onBack }) => {
     BLUE: { color: '#3b82f6', bg: '#eff6ff', text: '关注', icon: AlertCircle },
   };
 
-  const filtered = filter === 'all' ? warnings : warnings.filter(w => w.level === filter);
+  // 组合筛选
+  const filtered = useMemo(() => {
+    let result = warnings;
+    
+    // 等级筛选
+    if (levelFilter !== 'all') {
+      result = result.filter(w => w.level === levelFilter);
+    }
+    
+    // 采购员筛选
+    if (buyerFilter !== 'all') {
+      result = result.filter(w => {
+        const mat = matMap[w.itemCode];
+        return mat && mat.buyer === buyerFilter;
+      });
+    }
+    
+    return result;
+  }, [warnings, levelFilter, buyerFilter, matMap]);
+
   const stats = {
     RED: warnings.filter(w => w.level === 'RED').length,
     ORANGE: warnings.filter(w => w.level === 'ORANGE').length,
     YELLOW: warnings.filter(w => w.level === 'YELLOW').length,
     BLUE: warnings.filter(w => w.level === 'BLUE').length,
   };
+
+  const hasActiveFilters = levelFilter !== 'all' || buyerFilter !== 'all';
 
   if (loading) return <div style={{ padding: '32px' }}><Card><EmptyState icon={Clock} title="加载中" description="正在获取预警数据..." /></Card></div>;
   if (error) return <ErrorScreen error={error} onRetry={() => window.location.reload()} />;
@@ -1163,11 +1192,62 @@ const WarningsPage = ({ onBack }) => {
           <div style={{ width: '48px', height: '48px', background: '#fee2e2', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <AlertCircle size={24} style={{ color: '#ef4444' }} />
           </div>
-          <div>
+          <div style={{ flex: 1 }}>
             <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a', margin: 0 }}>库存预警</h1>
             <p style={{ fontSize: '14px', color: '#64748b', margin: '4px 0 0 0' }}>物料短缺与供应链告警</p>
           </div>
+          <Button variant="secondary" icon={Filter} onClick={() => setShowFilters(!showFilters)}>
+            筛选 {hasActiveFilters && <span style={{ color: '#3b82f6' }}>●</span>}
+          </Button>
         </div>
+
+        {/* 筛选面板 */}
+        {showFilters && (
+          <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px', marginBottom: '24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '8px' }}>预警等级</label>
+              <select 
+                value={levelFilter}
+                onChange={(e) => setLevelFilter(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', fontSize: '14px', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}
+              >
+                <option value="all">全部等级</option>
+                <option value="RED">严重</option>
+                <option value="ORANGE">紧急</option>
+                <option value="YELLOW">预警</option>
+                <option value="BLUE">关注</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '8px' }}>采购员</label>
+              <select 
+                value={buyerFilter}
+                onChange={(e) => setBuyerFilter(e.target.value)}
+                style={{ width: '100%', padding: '8px 12px', fontSize: '14px', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}
+              >
+                <option value="all">全部采购员</option>
+                {buyers.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <button
+                onClick={() => { setLevelFilter('all'); setBuyerFilter('all'); }}
+                style={{
+                  padding: '8px 16px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  borderRadius: '6px',
+                  border: '1px solid #e2e8f0',
+                  background: '#fff',
+                  color: '#64748b',
+                  cursor: 'pointer'
+                }}
+              >
+                重置筛选
+              </button>
+            </div>
+          </div>
+        )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px', marginBottom: '24px' }}>
           <MetricCard icon={XCircle} label="严重" value={stats.RED} />
@@ -1176,42 +1256,13 @@ const WarningsPage = ({ onBack }) => {
           <MetricCard icon={AlertCircle} label="关注" value={stats.BLUE} />
         </div>
 
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', overflowX: 'auto' }}>
-          {[
-            { k: 'all', l: '全部', c: warnings.length },
-            { k: 'RED', l: '严重', c: stats.RED },
-            { k: 'ORANGE', l: '紧急', c: stats.ORANGE },
-            { k: 'YELLOW', l: '预警', c: stats.YELLOW },
-            { k: 'BLUE', l: '关注', c: stats.BLUE },
-          ].map(v => (
-            <button
-              key={v.k}
-              onClick={() => setFilter(v.k)}
-              style={{ 
-                padding: '8px 16px',
-                fontSize: '14px',
-                fontWeight: 600,
-                borderRadius: '8px',
-                border: 'none',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.2s',
-                background: filter === v.k ? '#3b82f6' : '#f1f5f9',
-                color: filter === v.k ? '#fff' : '#374151'
-              }}
-            >
-              {v.l} ({v.c})
-            </button>
-          ))}
-        </div>
-
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1000px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1100px' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                {['等级', '物料编码', '物料名称', '所属产品', '库存', '需求', '交期', '供应商'].map(h => (
+                {['等级', '物料编码', '物料名称', '所属产品', '采购员', '库存', '需求', '交期', '供应商'].map(h => (
                   <th key={h} style={{ 
-                    textAlign: ['等级', '物料编码', '物料名称', '所属产品', '供应商'].includes(h) ? 'left' : 'center',
+                    textAlign: ['等级', '物料编码', '物料名称', '所属产品', '采购员', '供应商'].includes(h) ? 'left' : 'center',
                     padding: '12px 16px', 
                     fontSize: '11px', 
                     fontWeight: 600, 
@@ -1225,6 +1276,7 @@ const WarningsPage = ({ onBack }) => {
               {filtered.map((w, idx) => {
                 const cfg = levelConfig[w.level];
                 const Icon = cfg.icon;
+                const mat = matMap[w.itemCode];
                 return (
                   <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ padding: '16px' }}>
@@ -1246,6 +1298,12 @@ const WarningsPage = ({ onBack }) => {
                     <td style={{ padding: '16px', fontFamily: 'monospace', fontSize: '13px', color: '#0f172a' }}>{w.itemCode}</td>
                     <td style={{ padding: '16px', fontSize: '14px', fontWeight: 500, color: '#0f172a' }}>{w.itemName}</td>
                     <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{w.productName || '-'}</td>
+                    <td style={{ padding: '16px' }}>
+                      <div style={{ fontSize: '13px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Users size={12} />
+                        {mat?.buyer || '-'}
+                      </div>
+                    </td>
                     <td style={{ padding: '16px', textAlign: 'center' }}>
                       <span style={{ 
                         fontSize: '14px', 
@@ -1268,11 +1326,8 @@ const WarningsPage = ({ onBack }) => {
 
       <Card style={{ background: '#eff6ff', border: '1px solid #bfdbfe' }}>
         <div style={{ fontSize: '14px', color: '#1e293b' }}>
-          <strong style={{ color: '#0f172a' }}>{warnings.length}</strong> 个预警项目：
-          <strong style={{ color: '#dc2626', marginLeft: '8px' }}>{stats.RED}</strong> 严重，
-          <strong style={{ color: '#ea580c', marginLeft: '8px' }}>{stats.ORANGE}</strong> 紧急，
-          <strong style={{ color: '#ca8a04', marginLeft: '8px' }}>{stats.YELLOW}</strong> 预警，
-          <strong style={{ color: '#2563eb', marginLeft: '8px' }}>{stats.BLUE}</strong> 关注
+          显示 <strong style={{ color: '#0f172a' }}>{filtered.length}</strong> / {warnings.length} 个预警项目
+          {hasActiveFilters && <span style={{ color: '#64748b', marginLeft: '8px' }}>（已应用筛选条件）</span>}
         </div>
       </Card>
     </div>
@@ -1417,7 +1472,7 @@ export default function App() {
         {page.type === 'order' && <OrderDetail {...sharedProps} id={page.data} onNav={nav} onBack={back} />}
         {page.type === 'product' && <ProductDetail {...sharedProps} code={page.data} onNav={nav} onBack={back} />}
         {page.type === 'material' && <MaterialDetail {...sharedProps} code={page.data} onBack={back} />}
-        {page.type === 'warnings' && <WarningsPage onBack={back} />}
+        {page.type === 'warnings' && <WarningsPage onBack={back} mats={sharedProps.mats} />}
       </main>
 
       <style>{`
