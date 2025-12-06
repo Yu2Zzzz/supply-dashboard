@@ -610,33 +610,52 @@ const WarningsPage = ({ onBack }) => {
   const [error, setError] = useState(null);
 
   // 从后端获取预警数据
-  useEffect(() => {
-    const fetchWarnings = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await fetch(`${API_BASE}/api/warnings`);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        const result = await response.json();
-        // 按预警等级排序: RED > ORANGE > YELLOW > BLUE，然后按交期升序
-        const levelOrder = { RED: 1, ORANGE: 2, YELLOW: 3, BLUE: 4 };
-        const sorted = result.sort((a, b) => {
-          const levelDiff = levelOrder[a.level] - levelOrder[b.level];
-          if (levelDiff !== 0) return levelDiff;
-          return new Date(a.dueDate) - new Date(b.dueDate);
-        });
+useEffect(() => {
+  let cancelled = false; // 防止组件卸载后继续 setState
+
+  const fetchWarnings = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/warnings`);
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      }
+
+      const result = await res.json();
+
+      // 按预警等级排序: RED > ORANGE > YELLOW > BLUE，然后按交期升序
+      const levelOrder = { RED: 1, ORANGE: 2, YELLOW: 3, BLUE: 4 };
+      const sorted = [...result].sort((a, b) => {
+        const levelDiff = (levelOrder[a.level] || 99) - (levelOrder[b.level] || 99);
+        if (levelDiff !== 0) return levelDiff;
+        return new Date(a.dueDate) - new Date(b.dueDate);
+      });
+
+      if (!cancelled) {
         setWarnings(sorted);
-      } catch (err) {
-        console.error('Failed to fetch warnings:', err);
+      }
+    } catch (err) {
+      console.error('Failed to fetch warnings:', err);
+      if (!cancelled) {
         setError(err.message || '获取预警数据失败');
-      } finally {
+      }
+    } finally {
+      if (!cancelled) {
         setLoading(false);
       }
-    };
-    fetchWarnings();
-  }, []);
+    }
+  };
+
+  fetchWarnings();
+
+  // 清理函数：组件卸载时避免 setState
+  return () => {
+    cancelled = true;
+  };
+}, [API_BASE]);
 
   const levelConfig = {
     RED: { color: '#ef4444', bg: '#fef2f2', text: '严重', icon: '🔴' },
