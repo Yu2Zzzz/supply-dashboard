@@ -188,11 +188,34 @@ const ErrorScreen = ({ error, onRetry }) => (
   </div>
 );
 
+const TableRow = ({ children, onClick }) => {
+  const [isHover, setIsHover] = useState(false);
+  return (
+    <tr 
+      onClick={onClick}
+      onMouseEnter={() => setIsHover(true)}
+      onMouseLeave={() => setIsHover(false)}
+      style={{ 
+        cursor: 'pointer',
+        backgroundColor: isHover ? '#f8fafc' : 'transparent',
+        transition: 'background-color 0.2s'
+      }}
+    >
+      {children}
+    </tr>
+  );
+};
+
 // ============ Dashboard 仪表板 ============
 const Dashboard = ({ orders, orderLines, products, bom, mats, suppliers, pos, onNav }) => {
   const calcRisk = useMemo(() => createRiskCalculator(mats, pos, suppliers), [mats, pos, suppliers]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchType, setSearchType] = useState('order'); // 'order' or 'product'
+  const [activeTab, setActiveTab] = useState('orders');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    status: 'all',
+    salesPerson: 'all'
+  });
 
   const data = useMemo(() => {
     const orderData = orders.map(o => {
@@ -216,25 +239,69 @@ const Dashboard = ({ orders, orderLines, products, bom, mats, suppliers, pos, on
     return { orders: orderData };
   }, [orders, orderLines, bom, calcRisk]);
 
-  // 搜索过滤
+  // 产品数据
+  const productData = useMemo(() => {
+    return products.map(p => {
+      const lines = orderLines.filter(l => l.productCode === p.code);
+      const relatedOrders = [...new Set(lines.map(l => l.orderId))];
+      const totalQty = lines.reduce((s, l) => s + l.qty, 0);
+      const bomItems = bom.filter(b => b.p === p.code);
+      
+      const risks = lines.map(l => {
+        const o = orders.find(o => o.id === l.orderId);
+        return bomItems.map(b => calcRisk(b.m, b.c * l.qty, o.deliveryDate)).filter(Boolean);
+      }).flat();
+      
+      return {
+        ...p,
+        orderCount: relatedOrders.length,
+        totalQty,
+        materialCount: bomItems.length,
+        level: highestRisk(risks.map(r => r.level)),
+        maxScore: Math.max(0, ...risks.map(r => r.score))
+      };
+    });
+  }, [products, orderLines, bom, orders, calcRisk]);
+
+  // 获取业务员列表
+  const salesPeople = useMemo(() => [...new Set(orders.map(o => o.salesPerson).filter(Boolean))], [orders]);
+
+  // 搜索 + 筛选
   const filteredOrders = useMemo(() => {
-    if (searchType !== 'order' || !searchTerm) return data.orders;
-    const term = searchTerm.toLowerCase();
-    return data.orders.filter(o => 
-      o.id.toLowerCase().includes(term) || 
-      o.customer.toLowerCase().includes(term) ||
-      o.products.some(p => p.toLowerCase().includes(term))
-    );
-  }, [data.orders, searchTerm, searchType]);
+    let result = data.orders;
+    
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(o => 
+        o.id.toLowerCase().includes(term) || 
+        o.customer.toLowerCase().includes(term) ||
+        o.products.some(p => p.toLowerCase().includes(term)) ||
+        (o.salesPerson && o.salesPerson.toLowerCase().includes(term))
+      );
+    }
+    
+    if (filters.status !== 'all') {
+      result = result.filter(o => o.level === filters.status);
+    }
+    
+    if (filters.salesPerson !== 'all') {
+      result = result.filter(o => o.salesPerson === filters.salesPerson);
+    }
+    
+    return result;
+  }, [data.orders, searchTerm, filters]);
 
   const filteredProducts = useMemo(() => {
-    if (searchType !== 'product' || !searchTerm) return [];
-    const term = searchTerm.toLowerCase();
-    return products.filter(p => 
-      p.code.toLowerCase().includes(term) || 
-      p.name.toLowerCase().includes(term)
-    );
-  }, [products, searchTerm, searchType]);
+    let result = productData;
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      result = result.filter(p => 
+        p.code.toLowerCase().includes(term) || 
+        p.name.toLowerCase().includes(term)
+      );
+    }
+    return result;
+  }, [productData, searchTerm]);
 
   const stats = {
     overdue: data.orders.filter(o => o.level === 'overdue').length,
@@ -243,48 +310,16 @@ const Dashboard = ({ orders, orderLines, products, bom, mats, suppliers, pos, on
     total: orders.length,
   };
 
+  const hasActiveFilters = filters.status !== 'all' || filters.salesPerson !== 'all';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
       {/* 搜索栏 */}
       <Card>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => setSearchType('order')}
-              style={{
-                padding: '8px 16px',
-                fontSize: '13px',
-                fontWeight: 600,
-                borderRadius: '8px',
-                border: 'none',
-                cursor: 'pointer',
-                background: searchType === 'order' ? '#3b82f6' : '#f1f5f9',
-                color: searchType === 'order' ? '#fff' : '#64748b',
-                transition: 'all 0.2s'
-              }}
-            >
-              搜索订单
-            </button>
-            <button
-              onClick={() => setSearchType('product')}
-              style={{
-                padding: '8px 16px',
-                fontSize: '13px',
-                fontWeight: 600,
-                borderRadius: '8px',
-                border: 'none',
-                cursor: 'pointer',
-                background: searchType === 'product' ? '#3b82f6' : '#f1f5f9',
-                color: searchType === 'product' ? '#fff' : '#64748b',
-                transition: 'all 0.2s'
-              }}
-            >
-              搜索产品
-            </button>
-          </div>
           <input
             type="text"
-            placeholder={searchType === 'order' ? '输入订单号、客户名称或产品...' : '输入产品编码或名称...'}
+            placeholder="搜索订单号、客户、产品、业务员..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
@@ -318,41 +353,6 @@ const Dashboard = ({ orders, orderLines, products, bom, mats, suppliers, pos, on
             </button>
           )}
         </div>
-
-        {/* 产品搜索结果 */}
-        {searchType === 'product' && searchTerm && (
-          <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>
-              找到 {filteredProducts.length} 个产品
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '12px' }}>
-              {filteredProducts.map(p => (
-                <div
-                  key={p.code}
-                  onClick={() => onNav('product', p.code)}
-                  style={{
-                    padding: '16px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.background = '#f8fafc';
-                    e.currentTarget.style.borderColor = '#3b82f6';
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.background = 'transparent';
-                    e.currentTarget.style.borderColor = '#e2e8f0';
-                  }}
-                >
-                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>{p.code}</div>
-                  <div style={{ fontSize: '13px', color: '#64748b' }}>{p.name}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </Card>
 
       {/* 指标卡片 */}
@@ -363,39 +363,455 @@ const Dashboard = ({ orders, orderLines, products, bom, mats, suppliers, pos, on
         <MetricCard icon={Package} label="订单总数" value={stats.total} sublabel="系统中活跃订单" />
       </div>
 
+      {/* 标签切换 */}
+      <div style={{ display: 'flex', gap: '8px', borderBottom: '2px solid #e2e8f0' }}>
+        <button
+          onClick={() => setActiveTab('orders')}
+          style={{
+            padding: '12px 24px',
+            fontSize: '15px',
+            fontWeight: 600,
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            color: activeTab === 'orders' ? '#3b82f6' : '#64748b',
+            borderBottom: activeTab === 'orders' ? '2px solid #3b82f6' : '2px solid transparent',
+            marginBottom: '-2px',
+            transition: 'all 0.2s'
+          }}
+        >
+          订单概览 ({filteredOrders.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('products')}
+          style={{
+            padding: '12px 24px',
+            fontSize: '15px',
+            fontWeight: 600,
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            color: activeTab === 'products' ? '#3b82f6' : '#64748b',
+            borderBottom: activeTab === 'products' ? '2px solid #3b82f6' : '2px solid transparent',
+            marginBottom: '-2px',
+            transition: 'all 0.2s'
+          }}
+        >
+          产品概览 ({filteredProducts.length})
+        </button>
+      </div>
+
       {/* 订单表格 */}
+      {activeTab === 'orders' && (
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', margin: 0 }}>订单列表</h2>
+            <div style={{ position: 'relative' }}>
+              <Button variant="secondary" icon={Filter} onClick={() => setShowFilters(!showFilters)}>
+                筛选 {hasActiveFilters && <span style={{ color: '#3b82f6' }}>●</span>}
+              </Button>
+            </div>
+          </div>
+
+          {/* 筛选面板 */}
+          {showFilters && (
+            <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px', marginBottom: '24px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '8px' }}>状态</label>
+                <select 
+                  value={filters.status}
+                  onChange={(e) => setFilters({...filters, status: e.target.value})}
+                  style={{ width: '100%', padding: '8px 12px', fontSize: '14px', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}
+                >
+                  <option value="all">全部状态</option>
+                  <option value="overdue">延期</option>
+                  <option value="urgent">紧急</option>
+                  <option value="warning">预警</option>
+                  <option value="ongoing">正常</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '8px' }}>业务员</label>
+                <select 
+                  value={filters.salesPerson}
+                  onChange={(e) => setFilters({...filters, salesPerson: e.target.value})}
+                  style={{ width: '100%', padding: '8px 12px', fontSize: '14px', border: '1px solid #e2e8f0', borderRadius: '6px', background: '#fff', cursor: 'pointer' }}
+                >
+                  <option value="all">全部业务员</option>
+                  {salesPeople.map(sp => <option key={sp} value={sp}>{sp}</option>)}
+                </select>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <button
+                  onClick={() => setFilters({ status: 'all', salesPerson: 'all' })}
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    borderRadius: '6px',
+                    border: '1px solid #e2e8f0',
+                    background: '#fff',
+                    color: '#64748b',
+                    cursor: 'pointer'
+                  }}
+                >
+                  重置筛选
+                </button>
+              </div>
+            </div>
+          )}
+          
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                  <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>订单号</th>
+                  <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>客户</th>
+                  <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>业务员</th>
+                  <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>产品</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>交期</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>剩余天数</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>状态</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>问题数</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredOrders.map(o => (
+                  <TableRow key={o.id} onClick={() => onNav('order', o.id)}>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{o.id}</div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ fontSize: '14px', color: '#374151' }}>{o.customer}</div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ fontSize: '13px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Users size={12} />
+                        {o.salesPerson || '-'}
+                      </div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ fontSize: '14px', color: '#64748b', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.products.join(', ')}</div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                      <div style={{ fontSize: '14px', color: '#374151' }}>{o.deliveryDate}</div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                      <span style={{ 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        gap: '4px',
+                        padding: '4px 8px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        borderRadius: '4px',
+                        color: o.daysLeft <= 5 ? '#dc2626' : o.daysLeft <= 10 ? '#ea580c' : o.daysLeft <= 15 ? '#ca8a04' : '#16a34a',
+                        backgroundColor: o.daysLeft <= 5 ? '#fef2f2' : o.daysLeft <= 10 ? '#fff7ed' : o.daysLeft <= 15 ? '#fefce8' : '#f0fdf4'
+                      }}>
+                        <Clock size={12} />
+                        {o.daysLeft}天
+                      </span>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                      <StatusBadge level={o.level} size="sm" />
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                      <span style={{ 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center',
+                        width: '24px',
+                        height: '24px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        borderRadius: '50%',
+                        color: o.affected > 0 ? '#dc2626' : '#16a34a',
+                        backgroundColor: o.affected > 0 ? '#fee2e2' : '#dcfce7'
+                      }}>
+                        {o.affected}
+                      </span>
+                    </td>
+                  </TableRow>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* 产品表格 */}
+      {activeTab === 'products' && (
+        <Card>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                  <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>产品编码</th>
+                  <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>产品名称</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>关联订单</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>总需求量</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>BOM物料</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>风险分</th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProducts.map(p => (
+                  <TableRow key={p.code} onClick={() => onNav('product', p.code)}>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{p.code}</div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ fontSize: '14px', color: '#374151' }}>{p.name}</div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#3b82f6' }}>{p.orderCount}</div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                      <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>{p.totalQty.toLocaleString()}</div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#64748b' }}>{p.materialCount}</div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: p.maxScore >= 50 ? '#dc2626' : p.maxScore >= 25 ? '#ea580c' : '#16a34a' }}>
+                        {p.maxScore}
+                      </div>
+                    </td>
+                    <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                      <StatusBadge level={p.level} size="sm" />
+                    </td>
+                  </TableRow>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+};
+
+// ============ OrderDetail 订单详情页 ============
+const OrderDetail = ({ id, orders, orderLines, bom, mats, suppliers, pos, onNav, onBack }) => {
+  const calcRisk = useMemo(() => createRiskCalculator(mats, pos, suppliers), [mats, pos, suppliers]);
+  const order = orders.find(o => o.id === id);
+  
+  if (!order) return <Card><EmptyState icon={XCircle} title="订单不存在" description="未找到该订单信息" /></Card>;
+  
+  const lines = orderLines.filter(l => l.orderId === id);
+  const daysLeft = daysDiff(order.deliveryDate, TODAY);
+
+  const { allRisks, criticals } = useMemo(() => {
+    const allRisks = [];
+    lines.forEach(l => {
+      bom.filter(b => b.p === l.productCode).forEach(b => {
+        const r = calcRisk(b.m, b.c * l.qty, order.deliveryDate);
+        if (r) allRisks.push({ ...r, productCode: l.productCode, productName: l.productName });
+      });
+    });
+    const criticals = allRisks.filter(r => r.level !== 'ongoing').sort((a, b) => b.score - a.score);
+    return { allRisks, criticals };
+  }, [order, lines, bom, calcRisk]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <Button variant="secondary" icon={ChevronLeft} onClick={onBack}>返回</Button>
+      
       <Card>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', margin: 0 }}>
-            订单概览 {searchType === 'order' && searchTerm && `(${filteredOrders.length})`}
-          </h2>
-          <Button variant="secondary" icon={Filter}>筛选</Button>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 500, color: '#64748b', marginBottom: '4px' }}>销售订单</div>
+            <h1 style={{ fontSize: '28px', fontWeight: 700, color: '#0f172a', margin: '0 0 8px 0' }}>{id}</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#64748b', marginBottom: '4px' }}>
+              <Users size={16} />
+              <span>{order.customer}</span>
+            </div>
+            {order.salesPerson && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: '#eff6ff', borderRadius: '6px', fontSize: '12px', color: '#2563eb', marginTop: '8px' }}>
+                <Users size={12} />
+                <span>业务员: {order.salesPerson}</span>
+              </div>
+            )}
+          </div>
+          <StatusBadge level={highestRisk(allRisks.map(r => r.level))} />
         </div>
-        
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
+          {[
+            { label: '下单日期', value: order.orderDate, icon: Calendar },
+            { label: '交货日期', value: order.deliveryDate, icon: Truck },
+            { label: '剩余天数', value: `${daysLeft} 天`, icon: Clock },
+            { label: '产品种类', value: `${lines.length} 种`, icon: Package },
+          ].map((item, i) => (
+            <div key={i} style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: '#64748b', marginBottom: '8px' }}>
+                <item.icon size={14} />
+                <span>{item.label}</span>
+              </div>
+              <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{item.value}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {criticals.length > 0 && (
+        <div>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertCircle size={20} style={{ color: '#ef4444' }} />
+            关键预警物料
+          </h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
+            {criticals.slice(0, 6).map((m, i) => (
+              <Card key={i} onClick={() => onNav('material', m.code)} style={{ borderLeft: `4px solid ${RISK[m.level].color}` }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>{m.name}</div>
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>{m.code}</div>
+                  </div>
+                  <StatusBadge level={m.level} size="sm" />
+                </div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                  {m.delay > 0 && <span style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, borderRadius: '4px', color: '#dc2626', backgroundColor: '#fee2e2' }}>延期 {m.delay}天</span>}
+                  {m.gap > 0 && <span style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, borderRadius: '4px', color: '#ea580c', backgroundColor: '#ffedd5' }}>缺口 {m.gap.toLocaleString()}</span>}
+                </div>
+                <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <Box size={12} />
+                  <span>用于: {m.productName}</span>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <Card>
+        <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', marginBottom: '16px' }}>订单产品</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {lines.map(l => {
+            const risks = allRisks.filter(r => r.productCode === l.productCode);
+            return (
+              <div 
+                key={l.productCode}
+                onClick={() => onNav('product', l.productCode)}
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'space-between',
+                  padding: '16px',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>{l.productCode}</div>
+                  <div style={{ fontSize: '12px', color: '#64748b' }}>{l.productName}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>数量</div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{l.qty.toLocaleString()}</div>
+                  </div>
+                  <StatusBadge level={highestRisk(risks.map(r => r.level))} size="sm" />
+                  <ChevronRight size={16} style={{ color: '#94a3b8' }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+// ============ ProductDetail 产品详情页 ============
+const ProductDetail = ({ code, orders, orderLines, products, bom, mats, suppliers, pos, onNav, onBack }) => {
+  const calcRisk = useMemo(() => createRiskCalculator(mats, pos, suppliers), [mats, pos, suppliers]);
+  const product = products.find(p => p.code === code);
+  
+  if (!product) return <Card><EmptyState icon={XCircle} title="产品不存在" description="未找到该产品信息" /></Card>;
+  
+  const lines = orderLines.filter(l => l.productCode === code);
+  const totalDemand = lines.reduce((s, l) => s + l.qty, 0);
+  const relatedOrderIds = [...new Set(lines.map(l => l.orderId))];
+  const earliest = orders.filter(o => relatedOrderIds.includes(o.id)).sort((a, b) => new Date(a.deliveryDate) - new Date(b.deliveryDate))[0];
+
+  const relatedOrders = useMemo(() => {
+    return lines.map(l => {
+      const o = orders.find(o => o.id === l.orderId);
+      if (!o) return null;
+      const daysLeft = daysDiff(o.deliveryDate, TODAY);
+      const bomItems = bom.filter(b => b.p === code);
+      const risks = bomItems.map(b => calcRisk(b.m, b.c * l.qty, o.deliveryDate)).filter(Boolean);
+      return { 
+        ...o, 
+        qty: l.qty, 
+        daysLeft, 
+        level: highestRisk(risks.map(r => r.level)), 
+        score: Math.max(0, ...risks.map(r => r.score))
+      };
+    }).filter(Boolean).sort((a, b) => a.daysLeft - b.daysLeft);
+  }, [code, lines, orders, bom, calcRisk]);
+
+  const bomData = useMemo(() => {
+    let data = bom.filter(b => b.p === code).map(b => calcRisk(b.m, b.c * totalDemand, earliest?.deliveryDate || '2025-12-31')).filter(Boolean);
+    data.sort((a, b) => b.score - a.score);
+    return data;
+  }, [code, totalDemand, earliest, bom, calcRisk]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <Button variant="secondary" icon={ChevronLeft} onClick={onBack}>返回</Button>
+      
+      <Card>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 500, color: '#64748b', marginBottom: '4px' }}>产品信息</div>
+            <h1 style={{ fontSize: '28px', fontWeight: 700, color: '#0f172a', margin: '0 0 8px 0' }}>{code}</h1>
+            <div style={{ fontSize: '16px', color: '#374151' }}>{product.name}</div>
+          </div>
+          <StatusBadge level={highestRisk(bomData.map(m => m.level))} />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
+          <MetricCard icon={ShoppingCart} label="关联订单" value={relatedOrderIds.length} />
+          <MetricCard icon={TrendingUp} label="总需求量" value={totalDemand.toLocaleString()} />
+          <MetricCard icon={Calendar} label="最早交期" value={earliest?.deliveryDate || '-'} />
+          <MetricCard icon={Layers} label="BOM物料" value={bomData.length} />
+        </div>
+      </Card>
+
+      <Card>
+        <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', marginBottom: '16px' }}>
+          关联订单 ({relatedOrders.length})
+        </h2>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
                 <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>订单号</th>
                 <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>客户</th>
-                <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>产品</th>
-                <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>交期</th>
+                <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>需求数量</th>
+                <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>交货日期</th>
                 <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>剩余天数</th>
                 <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>状态</th>
-                <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>问题数</th>
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.map(o => (
+              {relatedOrders.map(o => (
                 <TableRow key={o.id} onClick={() => onNav('order', o.id)}>
                   <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{o.id}</div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#3b82f6' }}>{o.id}</div>
                   </td>
                   <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
                     <div style={{ fontSize: '14px', color: '#374151' }}>{o.customer}</div>
                   </td>
-                  <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ fontSize: '14px', color: '#64748b', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.products.join(', ')}</div>
+                  <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
+                    <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>{o.qty.toLocaleString()}</div>
                   </td>
                   <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
                     <div style={{ fontSize: '14px', color: '#374151' }}>{o.deliveryDate}</div>
@@ -419,47 +835,271 @@ const Dashboard = ({ orders, orderLines, products, bom, mats, suppliers, pos, on
                   <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
                     <StatusBadge level={o.level} size="sm" />
                   </td>
-                  <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
-                    <span style={{ 
-                      display: 'inline-flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center',
-                      width: '24px',
-                      height: '24px',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      borderRadius: '50%',
-                      color: o.affected > 0 ? '#dc2626' : '#16a34a',
-                      backgroundColor: o.affected > 0 ? '#fee2e2' : '#dcfce7'
-                    }}>
-                      {o.affected}
-                    </span>
-                  </td>
                 </TableRow>
               ))}
             </tbody>
           </table>
         </div>
       </Card>
+
+      <Card>
+        <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', marginBottom: '16px' }}>BOM物料清单</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '16px' }}>
+          {bomData.map(m => (
+            <div 
+              key={m.code}
+              onClick={() => onNav('material', m.code)}
+              style={{ 
+                padding: '16px',
+                border: '1px solid #e2e8f0',
+                borderLeft: `4px solid ${RISK[m.level].color}`,
+                borderRadius: '8px',
+                cursor: 'pointer',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>{m.name}</div>
+                  <div style={{ fontSize: '11px', color: '#64748b' }}>{m.code}</div>
+                </div>
+                <StatusBadge level={m.level} size="sm" />
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '12px' }}>
+                {[
+                  { label: '需求', value: m.demand, color: '#0f172a' },
+                  { label: '库存', value: m.inv, color: m.inv < m.safe ? '#dc2626' : '#16a34a' },
+                  { label: '在途', value: m.transit, color: '#2563eb' },
+                  { label: '缺口', value: m.gap, color: m.gap > 0 ? '#dc2626' : '#16a34a' },
+                ].map((item, i) => (
+                  <div key={i} style={{ textAlign: 'center', padding: '8px', background: '#f8fafc', borderRadius: '6px' }}>
+                    <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px' }}>{item.label}</div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: item.color }}>{item.value.toLocaleString()}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {m.delay > 0 && <span style={{ padding: '4px 8px', fontSize: '10px', fontWeight: 600, borderRadius: '4px', color: '#dc2626', backgroundColor: '#fee2e2' }}>延期 {m.delay}天</span>}
+                {m.singleSource && <span style={{ padding: '4px 8px', fontSize: '10px', fontWeight: 600, borderRadius: '4px', color: '#ca8a04', backgroundColor: '#fef3c7' }}>单一来源</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
     </div>
   );
 };
 
-const TableRow = ({ children, onClick }) => {
-  const [isHover, setIsHover] = useState(false);
+// ============ MaterialDetail 物料详情页 ============
+const MaterialDetail = ({ code, orders, orderLines, bom, mats, suppliers, pos, onBack }) => {
+  const calcRisk = useMemo(() => createRiskCalculator(mats, pos, suppliers), [mats, pos, suppliers]);
+  
+  const matMap = Object.fromEntries(mats.map(m => [m.code, m]));
+  const poByMat = pos.reduce((a, p) => { (a[p.mat] = a[p.mat] || []).push(p); return a; }, {});
+  const supplierByMat = suppliers.reduce((a, s) => { (a[s.mat] = a[s.mat] || []).push(s); return a; }, {});
+
+  const mat = matMap[code];
+  const matPOs = poByMat[code] || [];
+  const matSuppliers = supplierByMat[code] || [];
+
+  const affected = useMemo(() => {
+    return orderLines.filter(l => bom.some(b => b.p === l.productCode && b.m === code)).map(l => {
+      const o = orders.find(o => o.id === l.orderId);
+      const b = bom.find(b => b.p === l.productCode && b.m === code);
+      const demand = Math.round(b.c * l.qty);
+      const risk = calcRisk(code, demand, o.deliveryDate);
+      return { ...o, productName: l.productName, qty: l.qty, demand, daysLeft: daysDiff(o.deliveryDate, TODAY), level: risk?.level || 'ongoing' };
+    }).sort((a, b) => a.daysLeft - b.daysLeft);
+  }, [code, orders, orderLines, bom, calcRisk]);
+
+  const totalDemand = affected.reduce((s, o) => s + o.demand, 0);
+  const totalGap = Math.max(0, totalDemand - mat.inv - mat.transit);
+
+  if (!mat) return <Card><EmptyState icon={XCircle} title="物料不存在" description="未找到该物料信息" /></Card>;
+
   return (
-    <tr 
-      onClick={onClick}
-      onMouseEnter={() => setIsHover(true)}
-      onMouseLeave={() => setIsHover(false)}
-      style={{ 
-        cursor: 'pointer',
-        backgroundColor: isHover ? '#f8fafc' : 'transparent',
-        transition: 'background-color 0.2s'
-      }}
-    >
-      {children}
-    </tr>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <Button variant="secondary" icon={ChevronLeft} onClick={onBack}>返回</Button>
+      
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+        <Card>
+          <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Box size={18} />
+            物料信息
+          </h3>
+          {mat.buyer && (
+            <div style={{ marginBottom: '16px', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 12px', background: '#eff6ff', borderRadius: '6px', fontSize: '12px', color: '#2563eb' }}>
+              <Users size={12} />
+              <span>采购员: {mat.buyer}</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {[
+              { label: '物料编码', value: mat.code },
+              { label: '物料名称', value: mat.name },
+              { label: '规格型号', value: mat.spec },
+              { label: '单价', value: `¥${mat.price}/${mat.unit}` },
+              { label: '提前期', value: `${mat.lead} 天` },
+            ].map((item, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: i < 4 ? '1px solid #f1f5f9' : 'none' }}>
+                <span style={{ fontSize: '13px', color: '#64748b' }}>{item.label}</span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>{item.value}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card style={{ background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', border: '1px solid #86efac' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Package size={18} />
+            库存状态
+          </h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ padding: '16px', background: '#fff', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+              <div style={{ fontSize: '11px', color: '#16a34a', marginBottom: '4px' }}>当前库存</div>
+              <div style={{ fontSize: '32px', fontWeight: 800, color: mat.inv < mat.safe ? '#dc2626' : '#16a34a' }}>
+                {mat.inv.toLocaleString()}
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+              {[
+                { label: '安全库存', value: mat.safe, color: '#64748b' },
+                { label: '在途数量', value: mat.transit, color: '#2563eb' },
+                { label: '总缺口', value: totalGap, color: totalGap > 0 ? '#dc2626' : '#16a34a' },
+              ].map((item, i) => (
+                <div key={i} style={{ textAlign: 'center', padding: '12px', background: '#fff', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                  <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px' }}>{item.label}</div>
+                  <div style={{ fontSize: '16px', fontWeight: 700, color: item.color }}>{item.value.toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+
+        <Card style={{ background: 'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)', border: '1px solid #c4b5fd' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Factory size={18} />
+            供应商
+          </h3>
+          {mat.suppliers === 1 && (
+            <div style={{ marginBottom: '12px', padding: '8px 12px', background: '#fef3c7', border: '1px solid #fde047', borderRadius: '6px', fontSize: '12px', color: '#854d0e', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <AlertTriangle size={14} />
+              <span>单一来源风险</span>
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {matSuppliers.map(s => (
+              <div key={s.id} style={{ padding: '12px', background: '#fff', borderRadius: '8px', border: '1px solid #ddd6fe' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>{s.name}</span>
+                  {s.main && <span style={{ padding: '2px 8px', background: '#3b82f6', color: '#fff', fontSize: '10px', fontWeight: 600, borderRadius: '4px' }}>主供</span>}
+                </div>
+                <div style={{ display: 'flex', gap: '12px', fontSize: '11px' }}>
+                  <span style={{ color: s.onTime < 0.85 ? '#dc2626' : '#16a34a', fontWeight: 600 }}>
+                    准时率 {(s.onTime*100).toFixed(0)}%
+                  </span>
+                  <span style={{ color: '#64748b', fontWeight: 600 }}>质量 {(s.quality*100).toFixed(0)}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <Card>
+        <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', marginBottom: '16px' }}>采购订单</h3>
+        {matPOs.length === 0 ? (
+          <EmptyState icon={ShoppingCart} title="暂无采购订单" description="该物料尚未下单采购" />
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
+            {matPOs.map(p => {
+              const statusConfig = {
+                arrived: { bg: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', color: '#16a34a', text: '已到货' },
+                shipped: { bg: 'linear-gradient(135deg, #eff6ff, #dbeafe)', color: '#2563eb', text: '已发货' },
+                producing: { bg: 'linear-gradient(135deg, #fff7ed, #ffedd5)', color: '#ea580c', text: '生产中' },
+                confirmed: { bg: 'linear-gradient(135deg, #f8fafc, #f1f5f9)', color: '#64748b', text: '已确认' }
+              }[p.status];
+              
+              return (
+                <div key={p.po} style={{ padding: '16px', background: statusConfig.bg, border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                    <span style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>{p.po}</span>
+                    <span style={{ padding: '4px 8px', fontSize: '10px', fontWeight: 600, borderRadius: '4px', color: '#fff', backgroundColor: statusConfig.color }}>
+                      {statusConfig.text}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '8px' }}>{p.supplier}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', marginBottom: '8px' }}>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#64748b' }}>数量</div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{p.qty.toLocaleString()} {mat.unit}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '11px', color: '#64748b' }}>金额</div>
+                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>¥{p.amt.toLocaleString()}</div>
+                    </div>
+                  </div>
+                  <div style={{ paddingTop: '8px', borderTop: '1px solid rgba(0,0,0,0.05)', fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Calendar size={12} />
+                    <span>交期: {p.date}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', marginBottom: '16px' }}>受影响订单</h3>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                {['订单号', '客户', '产品', '需求量', '交期', '剩余', '状态'].map(h => (
+                  <th key={h} style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {affected.map((o, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                  <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#3b82f6' }}>{o.id}</td>
+                  <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{o.customer}</td>
+                  <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{o.productName}</td>
+                  <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{o.demand.toLocaleString()}</td>
+                  <td style={{ padding: '16px' }}>
+                    <div style={{ fontSize: '14px', color: '#374151' }}>{o.deliveryDate}</div>
+                  </td>
+                  <td style={{ padding: '16px' }}>
+                    <span style={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      gap: '4px',
+                      padding: '4px 8px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      borderRadius: '4px',
+                      color: o.daysLeft <= 5 ? '#dc2626' : o.daysLeft <= 10 ? '#ea580c' : '#16a34a',
+                      backgroundColor: o.daysLeft <= 5 ? '#fee2e2' : o.daysLeft <= 10 ? '#ffedd5' : '#dcfce7'
+                    }}>
+                      {o.daysLeft} 天
+                    </span>
+                  </td>
+                  <td style={{ padding: '16px' }}>
+                    <StatusBadge level={o.level} size="sm" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
   );
 };
 
@@ -639,599 +1279,6 @@ const WarningsPage = ({ onBack }) => {
   );
 };
 
-// ============ OrderDetail 订单详情页 ============
-const OrderDetail = ({ id, orders, orderLines, bom, mats, suppliers, pos, onNav, onBack }) => {
-  const calcRisk = useMemo(() => createRiskCalculator(mats, pos, suppliers), [mats, pos, suppliers]);
-  const order = orders.find(o => o.id === id);
-  
-  if (!order) return <Card><EmptyState icon={XCircle} title="订单不存在" description="未找到该订单信息" /></Card>;
-  
-  const lines = orderLines.filter(l => l.orderId === id);
-  const daysLeft = daysDiff(order.deliveryDate, TODAY);
-
-  const { allRisks, criticals } = useMemo(() => {
-    const allRisks = [];
-    lines.forEach(l => {
-      bom.filter(b => b.p === l.productCode).forEach(b => {
-        const r = calcRisk(b.m, b.c * l.qty, order.deliveryDate);
-        if (r) allRisks.push({ ...r, productCode: l.productCode, productName: l.productName });
-      });
-    });
-    const criticals = allRisks.filter(r => r.level !== 'ongoing').sort((a, b) => b.score - a.score);
-    return { allRisks, criticals };
-  }, [order, lines, bom, calcRisk]);
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <Button variant="secondary" icon={ChevronLeft} onClick={onBack}>返回</Button>
-      
-      {/* 订单信息卡片 */}
-      <Card>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
-          <div>
-            <div style={{ fontSize: '11px', fontWeight: 500, color: '#64748b', marginBottom: '4px' }}>销售订单</div>
-            <h1 style={{ fontSize: '28px', fontWeight: 700, color: '#0f172a', margin: '0 0 8px 0' }}>{id}</h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: '#64748b', marginBottom: '4px' }}>
-              <Users size={16} />
-              <span>{order.customer}</span>
-            </div>
-            {order.salesPerson && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: '#eff6ff', borderRadius: '6px', fontSize: '12px', color: '#2563eb', marginTop: '8px' }}>
-                <Users size={12} />
-                <span>业务员: {order.salesPerson}</span>
-              </div>
-            )}
-          </div>
-          <StatusBadge level={highestRisk(allRisks.map(r => r.level))} />
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
-          {[
-            { label: '下单日期', value: order.orderDate, icon: Calendar },
-            { label: '交货日期', value: order.deliveryDate, icon: Truck },
-            { label: '剩余天数', value: `${daysLeft} 天`, icon: Clock },
-            { label: '产品种类', value: `${lines.length} 种`, icon: Package },
-          ].map((item, i) => (
-            <div key={i} style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: '#64748b', marginBottom: '8px' }}>
-                <item.icon size={14} />
-                <span>{item.label}</span>
-              </div>
-              <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{item.value}</div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* 关键预警物料 */}
-      {criticals.length > 0 && (
-        <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <AlertCircle size={20} style={{ color: '#ef4444' }} />
-            关键预警物料
-          </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' }}>
-            {criticals.slice(0, 6).map((m, i) => (
-              <Card key={i} onClick={() => onNav('material', m.code)} style={{ borderLeft: `4px solid ${RISK[m.level].color}` }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>{m.name}</div>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>{m.code}</div>
-                  </div>
-                  <StatusBadge level={m.level} size="sm" />
-                </div>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
-                  {m.delay > 0 && (
-                    <span style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, borderRadius: '4px', color: '#dc2626', backgroundColor: '#fee2e2' }}>
-                      延期 {m.delay}天
-                    </span>
-                  )}
-                  {m.gap > 0 && (
-                    <span style={{ padding: '4px 8px', fontSize: '11px', fontWeight: 600, borderRadius: '4px', color: '#ea580c', backgroundColor: '#ffedd5' }}>
-                      缺口 {m.gap.toLocaleString()}
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <Box size={12} />
-                  <span>用于: {m.productName}</span>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 订单产品列表 */}
-      <Card>
-        <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', marginBottom: '16px' }}>订单产品</h2>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {lines.map(l => {
-            const risks = allRisks.filter(r => r.productCode === l.productCode);
-            return (
-              <div 
-                key={l.productCode}
-                onClick={() => onNav('product', l.productCode)}
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between',
-                  padding: '16px',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s'
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-              >
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>{l.productCode}</div>
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>{l.productName}</div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>数量</div>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{l.qty.toLocaleString()}</div>
-                  </div>
-                  <StatusBadge level={highestRisk(risks.map(r => r.level))} size="sm" />
-                  <ChevronRight size={16} style={{ color: '#94a3b8' }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
-    </div>
-  );
-};
-
-// ============ ProductDetail 产品详情页 ============
-const ProductDetail = ({ code, orders, orderLines, products, bom, mats, suppliers, pos, onNav, onBack }) => {
-  const calcRisk = useMemo(() => createRiskCalculator(mats, pos, suppliers), [mats, pos, suppliers]);
-  const product = products.find(p => p.code === code);
-  
-  if (!product) return <Card><EmptyState icon={XCircle} title="产品不存在" description="未找到该产品信息" /></Card>;
-  
-  const lines = orderLines.filter(l => l.productCode === code);
-  const totalDemand = lines.reduce((s, l) => s + l.qty, 0);
-  const relatedOrderIds = [...new Set(lines.map(l => l.orderId))];
-  const earliest = orders.filter(o => relatedOrderIds.includes(o.id)).sort((a, b) => new Date(a.deliveryDate) - new Date(b.deliveryDate))[0];
-
-  // 关联订单详情
-  const relatedOrders = useMemo(() => {
-    return lines.map(l => {
-      const o = orders.find(o => o.id === l.orderId);
-      if (!o) return null;
-      const daysLeft = daysDiff(o.deliveryDate, TODAY);
-      const bomItems = bom.filter(b => b.p === code);
-      const risks = bomItems.map(b => calcRisk(b.m, b.c * l.qty, o.deliveryDate)).filter(Boolean);
-      return { 
-        ...o, 
-        qty: l.qty, 
-        daysLeft, 
-        level: highestRisk(risks.map(r => r.level)), 
-        score: Math.max(0, ...risks.map(r => r.score))
-      };
-    }).filter(Boolean).sort((a, b) => a.daysLeft - b.daysLeft);
-  }, [code, lines, orders, bom, calcRisk]);
-
-  const bomData = useMemo(() => {
-    let data = bom.filter(b => b.p === code).map(b => calcRisk(b.m, b.c * totalDemand, earliest?.deliveryDate || '2025-12-31')).filter(Boolean);
-    data.sort((a, b) => b.score - a.score);
-    return data;
-  }, [code, totalDemand, earliest, bom, calcRisk]);
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <Button variant="secondary" icon={ChevronLeft} onClick={onBack}>返回</Button>
-      
-      <Card>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
-          <div>
-            <div style={{ fontSize: '11px', fontWeight: 500, color: '#64748b', marginBottom: '4px' }}>产品信息</div>
-            <h1 style={{ fontSize: '28px', fontWeight: 700, color: '#0f172a', margin: '0 0 8px 0' }}>{code}</h1>
-            <div style={{ fontSize: '16px', color: '#374151' }}>{product.name}</div>
-          </div>
-          <StatusBadge level={highestRisk(bomData.map(m => m.level))} />
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '16px' }}>
-          <MetricCard icon={ShoppingCart} label="关联订单" value={relatedOrderIds.length} />
-          <MetricCard icon={TrendingUp} label="总需求量" value={totalDemand.toLocaleString()} />
-          <MetricCard icon={Calendar} label="最早交期" value={earliest?.deliveryDate || '-'} />
-          <MetricCard icon={Layers} label="BOM物料" value={bomData.length} />
-        </div>
-      </Card>
-
-      {/* 关联订单列表 */}
-      <Card>
-        <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', marginBottom: '16px' }}>
-          关联订单 ({relatedOrders.length})
-        </h2>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>订单号</th>
-                <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>客户</th>
-                <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>需求数量</th>
-                <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>交货日期</th>
-                <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>剩余天数</th>
-                <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>状态</th>
-              </tr>
-            </thead>
-            <tbody>
-              {relatedOrders.map(o => (
-                <TableRow key={o.id} onClick={() => onNav('order', o.id)}>
-                  <td style={{ padding: '16px' }}>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#3b82f6' }}>{o.id}</div>
-                  </td>
-                  <td style={{ padding: '16px' }}>
-                    <div style={{ fontSize: '14px', color: '#374151' }}>{o.customer}</div>
-                  </td>
-                  <td style={{ padding: '16px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>{o.qty.toLocaleString()}</div>
-                  </td>
-                  <td style={{ padding: '16px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '14px', color: '#374151' }}>{o.deliveryDate}</div>
-                  </td>
-                  <td style={{ padding: '16px', textAlign: 'center' }}>
-                    <span style={{ 
-                      display: 'inline-flex', 
-                      alignItems: 'center', 
-                      gap: '4px',
-                      padding: '4px 8px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      borderRadius: '4px',
-                      color: o.daysLeft <= 5 ? '#dc2626' : o.daysLeft <= 10 ? '#ea580c' : o.daysLeft <= 15 ? '#ca8a04' : '#16a34a',
-                      backgroundColor: o.daysLeft <= 5 ? '#fef2f2' : o.daysLeft <= 10 ? '#fff7ed' : o.daysLeft <= 15 ? '#fefce8' : '#f0fdf4'
-                    }}>
-                      <Clock size={12} />
-                      {o.daysLeft}天
-                    </span>
-                  </td>
-                  <td style={{ padding: '16px', textAlign: 'center' }}>
-                    <StatusBadge level={o.level} size="sm" />
-                  </td>
-                </TableRow>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* 关联订单列表 */}
-      <Card>
-        <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', marginBottom: '16px' }}>
-          关联订单 ({relatedOrders.length})
-        </h2>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>订单号</th>
-                <th style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>客户</th>
-                <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>需求数量</th>
-                <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>交货日期</th>
-                <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>剩余天数</th>
-                <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>风险分</th>
-                <th style={{ textAlign: 'center', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>状态</th>
-              </tr>
-            </thead>
-            <tbody>
-              {relatedOrders.map(o => (
-                <TableRow key={o.id} onClick={() => onNav('order', o.id)}>
-                  <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#3b82f6' }}>{o.id}</div>
-                  </td>
-                  <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ fontSize: '14px', color: '#374151' }}>{o.customer}</div>
-                  </td>
-                  <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
-                    <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>{o.qty.toLocaleString()}</div>
-                  </td>
-                  <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
-                    <div style={{ fontSize: '14px', color: '#374151' }}>{o.deliveryDate}</div>
-                  </td>
-                  <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
-                    <span style={{ 
-                      display: 'inline-flex', 
-                      alignItems: 'center', 
-                      gap: '4px',
-                      padding: '4px 8px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      borderRadius: '4px',
-                      color: o.daysLeft <= 5 ? '#dc2626' : o.daysLeft <= 10 ? '#ea580c' : o.daysLeft <= 15 ? '#ca8a04' : '#16a34a',
-                      backgroundColor: o.daysLeft <= 5 ? '#fef2f2' : o.daysLeft <= 10 ? '#fff7ed' : o.daysLeft <= 15 ? '#fefce8' : '#f0fdf4'
-                    }}>
-                      <Clock size={12} />
-                      {o.daysLeft}天
-                    </span>
-                  </td>
-                  <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
-                    <div style={{ fontSize: '14px', fontWeight: 700, color: o.score >= 50 ? '#dc2626' : o.score >= 25 ? '#ea580c' : '#16a34a' }}>
-                      {o.score}
-                    </div>
-                  </td>
-                  <td style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', textAlign: 'center' }}>
-                    <StatusBadge level={o.level} size="sm" />
-                  </td>
-                </TableRow>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-      <Card>
-        <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#0f172a', marginBottom: '16px' }}>BOM物料清单</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))', gap: '16px' }}>
-          {bomData.map(m => (
-            <div 
-              key={m.code}
-              onClick={() => onNav('material', m.code)}
-              style={{ 
-                padding: '16px',
-                border: '1px solid #e2e8f0',
-                borderLeft: `4px solid ${RISK[m.level].color}`,
-                borderRadius: '8px',
-                cursor: 'pointer',
-                transition: 'background 0.2s'
-              }}
-              onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-            >
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', marginBottom: '4px' }}>{m.name}</div>
-                  <div style={{ fontSize: '11px', color: '#64748b' }}>{m.code}</div>
-                </div>
-                <StatusBadge level={m.level} size="sm" />
-              </div>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', marginBottom: '12px' }}>
-                {[
-                  { label: '需求', value: m.demand, color: '#0f172a' },
-                  { label: '库存', value: m.inv, color: m.inv < m.safe ? '#dc2626' : '#16a34a' },
-                  { label: '在途', value: m.transit, color: '#2563eb' },
-                  { label: '缺口', value: m.gap, color: m.gap > 0 ? '#dc2626' : '#16a34a' },
-                ].map((item, i) => (
-                  <div key={i} style={{ textAlign: 'center', padding: '8px', background: '#f8fafc', borderRadius: '6px' }}>
-                    <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px' }}>{item.label}</div>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: item.color }}>{item.value.toLocaleString()}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {m.delay > 0 && <span style={{ padding: '4px 8px', fontSize: '10px', fontWeight: 600, borderRadius: '4px', color: '#dc2626', backgroundColor: '#fee2e2' }}>延期 {m.delay}天</span>}
-                {m.singleSource && <span style={{ padding: '4px 8px', fontSize: '10px', fontWeight: 600, borderRadius: '4px', color: '#ca8a04', backgroundColor: '#fef3c7' }}>单一来源</span>}
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-    </div>
-  );
-};
-
-// ============ MaterialDetail 物料详情页 ============
-const MaterialDetail = ({ code, orders, orderLines, bom, mats, suppliers, pos, onBack }) => {
-  const calcRisk = useMemo(() => createRiskCalculator(mats, pos, suppliers), [mats, pos, suppliers]);
-  
-  const matMap = Object.fromEntries(mats.map(m => [m.code, m]));
-  const poByMat = pos.reduce((a, p) => { (a[p.mat] = a[p.mat] || []).push(p); return a; }, {});
-  const supplierByMat = suppliers.reduce((a, s) => { (a[s.mat] = a[s.mat] || []).push(s); return a; }, {});
-
-  const mat = matMap[code];
-  const matPOs = poByMat[code] || [];
-  const matSuppliers = supplierByMat[code] || [];
-
-  const affected = useMemo(() => {
-    return orderLines.filter(l => bom.some(b => b.p === l.productCode && b.m === code)).map(l => {
-      const o = orders.find(o => o.id === l.orderId);
-      const b = bom.find(b => b.p === l.productCode && b.m === code);
-      const demand = Math.round(b.c * l.qty);
-      const risk = calcRisk(code, demand, o.deliveryDate);
-      return { ...o, productName: l.productName, qty: l.qty, demand, daysLeft: daysDiff(o.deliveryDate, TODAY), level: risk?.level || 'ongoing' };
-    }).sort((a, b) => a.daysLeft - b.daysLeft);
-  }, [code, orders, orderLines, bom, calcRisk]);
-
-  const totalDemand = affected.reduce((s, o) => s + o.demand, 0);
-  const totalGap = Math.max(0, totalDemand - mat.inv - mat.transit);
-
-  if (!mat) return <Card><EmptyState icon={XCircle} title="物料不存在" description="未找到该物料信息" /></Card>;
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      <Button variant="secondary" icon={ChevronLeft} onClick={onBack}>返回</Button>
-      
-      {/* 物料信息网格 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
-        {/* 物料基本信息 */}
-        <Card>
-          <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Box size={18} />
-            物料信息
-          </h3>
-          {mat.buyer && (
-            <div style={{ marginBottom: '16px', display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '6px 12px', background: '#eff6ff', borderRadius: '6px', fontSize: '12px', color: '#2563eb' }}>
-              <Users size={12} />
-              <span>采购员: {mat.buyer}</span>
-            </div>
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {[
-              { label: '物料编码', value: mat.code },
-              { label: '物料名称', value: mat.name },
-              { label: '规格型号', value: mat.spec },
-              { label: '单价', value: `¥${mat.price}/${mat.unit}` },
-              { label: '提前期', value: `${mat.lead} 天` },
-            ].map((item, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: i < 4 ? '1px solid #f1f5f9' : 'none' }}>
-                <span style={{ fontSize: '13px', color: '#64748b' }}>{item.label}</span>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>{item.value}</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        {/* 库存状态 */}
-        <Card style={{ background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)', border: '1px solid #86efac' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Package size={18} />
-            库存状态
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div style={{ padding: '16px', background: '#fff', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
-              <div style={{ fontSize: '11px', color: '#16a34a', marginBottom: '4px' }}>当前库存</div>
-              <div style={{ fontSize: '32px', fontWeight: 800, color: mat.inv < mat.safe ? '#dc2626' : '#16a34a' }}>
-                {mat.inv.toLocaleString()}
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-              {[
-                { label: '安全库存', value: mat.safe, color: '#64748b' },
-                { label: '在途数量', value: mat.transit, color: '#2563eb' },
-                { label: '总缺口', value: totalGap, color: totalGap > 0 ? '#dc2626' : '#16a34a' },
-              ].map((item, i) => (
-                <div key={i} style={{ textAlign: 'center', padding: '12px', background: '#fff', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
-                  <div style={{ fontSize: '10px', color: '#64748b', marginBottom: '4px' }}>{item.label}</div>
-                  <div style={{ fontSize: '16px', fontWeight: 700, color: item.color }}>{item.value.toLocaleString()}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Card>
-
-        {/* 供应商信息 */}
-        <Card style={{ background: 'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)', border: '1px solid #c4b5fd' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Factory size={18} />
-            供应商
-          </h3>
-          {mat.suppliers === 1 && (
-            <div style={{ marginBottom: '12px', padding: '8px 12px', background: '#fef3c7', border: '1px solid #fde047', borderRadius: '6px', fontSize: '12px', color: '#854d0e', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <AlertTriangle size={14} />
-              <span>单一来源风险</span>
-            </div>
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {matSuppliers.map(s => (
-              <div key={s.id} style={{ padding: '12px', background: '#fff', borderRadius: '8px', border: '1px solid #ddd6fe' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>{s.name}</span>
-                  {s.main && <span style={{ padding: '2px 8px', background: '#3b82f6', color: '#fff', fontSize: '10px', fontWeight: 600, borderRadius: '4px' }}>主供</span>}
-                </div>
-                <div style={{ display: 'flex', gap: '12px', fontSize: '11px' }}>
-                  <span style={{ color: s.onTime < 0.85 ? '#dc2626' : '#16a34a', fontWeight: 600 }}>
-                    准时率 {(s.onTime*100).toFixed(0)}%
-                  </span>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>质量 {(s.quality*100).toFixed(0)}%</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
-
-      {/* 采购订单 */}
-      <Card>
-        <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', marginBottom: '16px' }}>采购订单</h3>
-        {matPOs.length === 0 ? (
-          <EmptyState icon={ShoppingCart} title="暂无采购订单" description="该物料尚未下单采购" />
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
-            {matPOs.map(p => {
-              const statusConfig = {
-                arrived: { bg: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', color: '#16a34a', text: '已到货' },
-                shipped: { bg: 'linear-gradient(135deg, #eff6ff, #dbeafe)', color: '#2563eb', text: '已发货' },
-                producing: { bg: 'linear-gradient(135deg, #fff7ed, #ffedd5)', color: '#ea580c', text: '生产中' },
-                confirmed: { bg: 'linear-gradient(135deg, #f8fafc, #f1f5f9)', color: '#64748b', text: '已确认' }
-              }[p.status];
-              
-              return (
-                <div key={p.po} style={{ padding: '16px', background: statusConfig.bg, border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                    <span style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>{p.po}</span>
-                    <span style={{ padding: '4px 8px', fontSize: '10px', fontWeight: 600, borderRadius: '4px', color: '#fff', backgroundColor: statusConfig.color }}>
-                      {statusConfig.text}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '8px' }}>{p.supplier}</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'end', marginBottom: '8px' }}>
-                    <div>
-                      <div style={{ fontSize: '11px', color: '#64748b' }}>数量</div>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{p.qty.toLocaleString()} {mat.unit}</div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '11px', color: '#64748b' }}>金额</div>
-                      <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>¥{p.amt.toLocaleString()}</div>
-                    </div>
-                  </div>
-                  <div style={{ paddingTop: '8px', borderTop: '1px solid rgba(0,0,0,0.05)', fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <Calendar size={12} />
-                    <span>交期: {p.date}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
-
-      {/* 受影响订单 */}
-      <Card>
-        <h3 style={{ fontSize: '16px', fontWeight: 600, color: '#0f172a', marginBottom: '16px' }}>受影响订单</h3>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                {['订单号', '客户', '产品', '需求量', '交期', '剩余', '状态'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {affected.map((o, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#3b82f6' }}>{o.id}</td>
-                  <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{o.customer}</td>
-                  <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{o.productName}</td>
-                  <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{o.demand.toLocaleString()}</td>
-                  <td style={{ padding: '16px' }}>
-                    <div style={{ fontSize: '14px', color: '#374151' }}>{o.deliveryDate}</div>
-                  </td>
-                  <td style={{ padding: '16px' }}>
-                    <span style={{ 
-                      display: 'inline-flex', 
-                      alignItems: 'center', 
-                      gap: '4px',
-                      padding: '4px 8px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      borderRadius: '4px',
-                      color: o.daysLeft <= 5 ? '#dc2626' : o.daysLeft <= 10 ? '#ea580c' : '#16a34a',
-                      backgroundColor: o.daysLeft <= 5 ? '#fee2e2' : o.daysLeft <= 10 ? '#ffedd5' : '#dcfce7'
-                    }}>
-                      {o.daysLeft} 天
-                    </span>
-                  </td>
-                  <td style={{ padding: '16px' }}>
-                    <StatusBadge level={o.level} size="sm" />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </div>
-  );
-};
-
 // ============ 主应用 ============
 export default function App() {
   const [page, setPage] = useState({ type: 'dashboard', data: null });
@@ -1240,11 +1287,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // 导航函数 - 添加 URL 更新
   const nav = useCallback((type, data) => { 
     setHistory(h => [...h, page]); 
     setPage({ type, data });
-    // 更新 URL
     const url = type === 'dashboard' ? '/' : `/${type}/${data || ''}`;
     window.history.pushState({ type, data }, '', url);
   }, [page]);
@@ -1254,7 +1299,6 @@ export default function App() {
       const prevPage = history[history.length - 1];
       setPage(prevPage); 
       setHistory(h => h.slice(0, -1));
-      // 更新 URL
       const url = prevPage.type === 'dashboard' ? '/' : `/${prevPage.type}/${prevPage.data || ''}`;
       window.history.pushState(prevPage, '', url);
     } 
@@ -1277,7 +1321,6 @@ export default function App() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // ESC键返回功能
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && history.length > 0) {
@@ -1288,12 +1331,10 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [history, back]);
 
-  // 浏览器后退/前进按钮支持
   useEffect(() => {
     const handlePopState = (e) => {
       if (e.state) {
         setPage(e.state);
-        // 清空 history，因为这是浏览器导航
         setHistory([]);
       }
     };
@@ -1301,7 +1342,6 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // 初始化时从 URL 读取页面
   useEffect(() => {
     const path = window.location.pathname;
     const match = path.match(/^\/(order|product|material|warnings)\/(.+)$/);
@@ -1329,7 +1369,6 @@ export default function App() {
 
   return (
     <div style={{ minHeight: '100vh', background: '#f8fafc' }}>
-      {/* 顶部导航栏 */}
       <header style={{ 
         position: 'sticky', 
         top: 0, 
@@ -1354,7 +1393,6 @@ export default function App() {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              {/* ESC提示 */}
               {history.length > 0 && (
                 <div style={{ fontSize: '11px', color: '#64748b', padding: '6px 10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
                   按 <kbd style={{ padding: '2px 6px', background: '#fff', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '10px', fontWeight: 600 }}>ESC</kbd> 返回
@@ -1374,7 +1412,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* 主内容区域 */}
       <main style={{ maxWidth: '1280px', margin: '0 auto', padding: '32px 24px' }}>
         {page.type === 'dashboard' && <Dashboard {...sharedProps} onNav={nav} />}
         {page.type === 'order' && <OrderDetail {...sharedProps} id={page.data} onNav={nav} onBack={back} />}
