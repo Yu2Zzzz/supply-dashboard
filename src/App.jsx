@@ -1,7 +1,15 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 
 // ============ API 配置 ============
-const API_BASE = 'http://localhost:4000';
+const BASE_URL = import.meta.env.PROD
+  ? 'https://supply-backend-g3gm.onrender.com'
+  : 'http://localhost:4000';
+
+useEffect(() => {
+  axios.get(`${BASE_URL}/api/data`)
+    .then((res) => setBackendData(res.data))
+    .catch((err) => console.error(err));
+}, []);
 
 // ============ 工具函数 ============
 const TODAY = new Date();
