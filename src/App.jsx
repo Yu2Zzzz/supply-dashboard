@@ -144,13 +144,24 @@ const LoginPage = memo(() => {
   const { login } = useAuth();
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    const result = await login(username, password);
-    if (!result.success) setError(result.message);
-    setLoading(false);
-  };
+  e.preventDefault();
+  setError('');
+  setLoading(true);
+
+  const result = await login(username, password);
+
+  if (result.success) {
+    // 登录成功 → 直接刷新页面
+    // 刷新后 AuthProvider 会检测 token，从而进入主系统页面
+    window.location.reload();
+    return;
+  }
+
+  // 登录失败
+  setError(result.message || "登录失败");
+  setLoading(false);
+};
+
 
   return (
     <div style={{ 
