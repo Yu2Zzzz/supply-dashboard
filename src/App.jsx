@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useCallback, useEffect, createContext, useContext, memo, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, memo, useRef } from 'react';
+import { useAuth } from './contexts/AuthContext';
 import { AlertCircle, Package, TrendingUp, TrendingDown, ChevronLeft, CheckCircle, AlertTriangle, XCircle, Clock, Factory, Users, Calendar, Box, Truck, AlertOctagon, Filter, ChevronRight, Layers, ShoppingCart, LogOut, User, Menu, X, Home, FileText, Settings, Warehouse, Building, UserPlus, Edit, Trash2, Plus, Save, Search, RefreshCw, Zap, Eye, Play, Send, Check, ArrowRight } from 'lucide-react';
 
 // ============ 常量配置 ============
@@ -57,47 +58,6 @@ const formatDateInput = (dateStr) => {
 };
 
 // ============ 认证上下文 ============
-const AuthContext = createContext(null);
-
-const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(() => localStorage.getItem('token'));
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('user');
-    return saved ? JSON.parse(saved) : null;
-  });
-
-  const login = async (username, password) => {
-    try {
-      const res = await fetch(`${BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      const data = await res.json();
-      if (data.success && data.data?.token) {
-        setToken(data.data.token);
-        setUser(data.data.user);
-        localStorage.setItem('token', data.data.token);
-        localStorage.setItem('user', JSON.stringify(data.data.user));
-        return { success: true };
-      }
-      return { success: false, message: data.message || '登录失败' };
-    } catch (e) {
-      return { success: false, message: '网络错误' };
-    }
-  };
-
-  const logout = () => {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-  };
-
-  return <AuthContext.Provider value={{ token, user, login, logout }}>{children}</AuthContext.Provider>;
-};
-
-const useAuth = () => useContext(AuthContext);
 
 // ============ API Hook ============
 const useApi = () => {
@@ -2529,11 +2489,7 @@ const MainApp = () => {
 
 // ============ 主应用入口 ============
 export default function App() {
-  return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
-  );
+  return <AppContent />;
 }
 
 function AppContent() {
