@@ -1,10 +1,130 @@
 import React, { useState, useMemo, useCallback, useEffect, createContext, useContext, memo, useRef } from 'react';
 import { AlertCircle, Package, TrendingUp, TrendingDown, ChevronLeft, CheckCircle, AlertTriangle, XCircle, Clock, Factory, Users, Calendar, Box, Truck, AlertOctagon, Filter, ChevronRight, Layers, ShoppingCart, LogOut, User, Menu, X, Home, FileText, Settings, Warehouse, Building, UserPlus, Edit, Trash2, Plus, Save, Search, RefreshCw, Zap, Eye, Play, Send, Check, ArrowRight } from 'lucide-react';
-// 在第2行添加这些
-import { BASE_URL, RISK, PO_STATUS, SO_STATUS } from './config/constants';
-import { debounce, formatDate, formatDateInput, createRiskCalculator, highestRisk, TODAY, daysDiff } from './utils/helpers';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { useApi } from './hooks/useApi';
+
+// ============ 常量配置 ============
+const BASE_URL = 'https://supply-backend-production.up.railway.app';
+
+// 采购订单状态
+const PO_STATUS = {
+  draft: { text: '草稿', color: '#64748b', bgColor: '#f1f5f9', next: 'confirmed' },
+  confirmed: { text: '已确认', color: '#3b82f6', bgColor: '#dbeafe', next: 'producing' },
+  producing: { text: '生产中', color: '#f59e0b', bgColor: '#fef3c7', next: 'shipped' },
+  shipped: { text: '已发货', color: '#8b5cf6', bgColor: '#ede9fe', next: 'arrived' },
+  arrived: { text: '已到货', color: '#10b981', bgColor: '#d1fae5', next: null },
+  cancelled: { text: '已取消', color: '#ef4444', bgColor: '#fee2e2', next: null }
+};
+
+// 销售订单状态
+const SO_STATUS = {
+  pending: { text: '待处理', color: '#64748b', bgColor: '#f1f5f9', next: 'confirmed' },
+  confirmed: { text: '已确认', color: '#3b82f6', bgColor: '#dbeafe', next: 'processing' },
+  processing: { text: '处理中', color: '#f59e0b', bgColor: '#fef3c7', next: 'shipped' },
+  shipped: { text: '已发货', color: '#8b5cf6', bgColor: '#ede9fe', next: 'completed' },
+  completed: { text: '已完成', color: '#10b981', bgColor: '#d1fae5', next: null },
+  cancelled: { text: '已取消', color: '#ef4444', bgColor: '#fee2e2', next: null }
+};
+
+// 风险等级
+const RISK = {
+  none: { level: 0, text: '正常', color: '#10b981', bgColor: '#d1fae5' },
+  low: { level: 1, text: '低风险', color: '#f59e0b', bgColor: '#fef3c7' },
+  medium: { level: 2, text: '中风险', color: '#f97316', bgColor: '#ffedd5' },
+  high: { level: 3, text: '高风险', color: '#ef4444', bgColor: '#fee2e2' }
+};
+
+// 日期工具函数
+const TODAY = new Date();
+TODAY.setHours(0, 0, 0, 0);
+
+const daysDiff = (date1, date2) => {
+  const d1 = new Date(date1);
+  const d2 = new Date(date2);
+  d1.setHours(0, 0, 0, 0);
+  d2.setHours(0, 0, 0, 0);
+  return Math.ceil((d2 - d1) / (1000 * 60 * 60 * 24));
+};
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const formatDateInput = (dateStr) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  return d.toISOString().split('T')[0];
+};
+
+// ============ 认证上下文 ============
+const AuthContext = createContext(null);
+
+const AuthProvider = ({ children }) => {
+  const [token, setToken] = useState(() => localStorage.getItem('token'));
+  const [user, setUser] = useState(() => {
+    const saved = localStorage.getItem('user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  const login = async (username, password) => {
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (data.success && data.data?.token) {
+        setToken(data.data.token);
+        setUser(data.data.user);
+        localStorage.setItem('token', data.data.token);
+        localStorage.setItem('user', JSON.stringify(data.data.user));
+        return { success: true };
+      }
+      return { success: false, message: data.message || '登录失败' };
+    } catch (e) {
+      return { success: false, message: '网络错误' };
+    }
+  };
+
+  const logout = () => {
+    setToken(null);
+    setUser(null);
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  };
+
+  return <AuthContext.Provider value={{ token, user, login, logout }}>{children}</AuthContext.Provider>;
+};
+
+const useAuth = () => useContext(AuthContext);
+
+// ============ API Hook ============
+const useApi = () => {
+  const { token, logout } = useAuth();
+  
+  const request = useCallback(async (endpoint, options = {}) => {
+    try {
+      const res = await fetch(`${BASE_URL}${endpoint}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          ...options.headers
+        }
+      });
+      if (res.status === 401) {
+        logout();
+        return { success: false, message: '登录已过期' };
+      }
+      return await res.json();
+    } catch (e) {
+      return { success: false, message: '网络错误' };
+    }
+  }, [token, logout]);
+
+  return { request };
+};
 
 // ============ API 配置 ============
 
@@ -1106,8 +1226,9 @@ const SalesOrderManagementPage = memo(() => {
   const [showModal, setShowModal] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [keyword, setKeyword] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [formData, setFormData] = useState({
-    customerId: '', orderDate: '', deliveryDate: '', salesPerson: '', status: 'pending', remark: '', lines: []
+    orderNo: '', customerId: '', orderDate: '', deliveryDate: '', salesPerson: '', status: 'pending', remark: '', lines: []
   });
 
   const fetchData = useCallback(async () => {
@@ -1117,23 +1238,30 @@ const SalesOrderManagementPage = memo(() => {
       request('/api/customers'),
       request('/api/products')
     ]);
-    console.log('Products response:', productsRes); // 调试用
     if (ordersRes.success) setOrders(ordersRes.data?.list || ordersRes.data || []);
     if (customersRes.success) setCustomers(customersRes.data?.list || customersRes.data || []);
-    if (productsRes.success) {
-      const prodList = productsRes.data?.list || productsRes.data || [];
-      console.log('Products list:', prodList); // 调试用
-      setProducts(prodList);
-    }
+    if (productsRes.success) setProducts(productsRes.data?.list || productsRes.data || []);
     setLoading(false);
   }, [request]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // 生成订单号
+  const generateOrderNo = () => {
+    const today = new Date();
+    const prefix = `SO${today.getFullYear()}-`;
+    const seq = String(Math.floor(Math.random() * 10000)).padStart(3, '0');
+    return prefix + seq;
+  };
+
   const handleSubmit = async () => {
+    const submitData = {
+      ...formData,
+      orderNo: formData.orderNo || generateOrderNo()
+    };
     const endpoint = editingOrder ? `/api/sales-orders/${editingOrder.id}` : '/api/sales-orders';
     const method = editingOrder ? 'PUT' : 'POST';
-    const res = await request(endpoint, { method, body: JSON.stringify(formData) });
+    const res = await request(endpoint, { method, body: JSON.stringify(submitData) });
     if (res.success) { setShowModal(false); fetchData(); }
     else alert(res.message || '操作失败');
   };
@@ -1145,15 +1273,55 @@ const SalesOrderManagementPage = memo(() => {
     else alert(res.message || '删除失败');
   };
 
+  // 状态流转 - 使用PUT更新整个订单
+  const handleStatusChange = async (order, newStatus) => {
+    const formatDateForApi = (dateStr) => {
+      if (!dateStr) return null;
+      const d = new Date(dateStr);
+      return d.toISOString().split('T')[0];
+    };
+
+    const res = await request(`/api/sales-orders/${order.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        orderNo: order.orderNo,
+        customerId: order.customerId,
+        orderDate: formatDateForApi(order.orderDate),
+        deliveryDate: formatDateForApi(order.deliveryDate),
+        salesPerson: order.salesPerson || '',
+        status: newStatus,
+        remark: order.remark || '',
+        lines: order.lines || []
+      })
+    });
+    if (res.success) fetchData();
+    else alert(res.message || '状态更新失败');
+  };
+
   const openModal = (order = null) => {
     setEditingOrder(order);
     if (order) {
       setFormData({
-        customerId: order.customerId, orderDate: formatDateInput(order.orderDate), deliveryDate: formatDateInput(order.deliveryDate),
-        salesPerson: order.salesPerson || '', status: order.status || 'pending', remark: order.remark || '', lines: order.lines || []
+        orderNo: order.orderNo,
+        customerId: order.customerId, 
+        orderDate: formatDateInput(order.orderDate), 
+        deliveryDate: formatDateInput(order.deliveryDate),
+        salesPerson: order.salesPerson || '', 
+        status: order.status || 'pending', 
+        remark: order.remark || '', 
+        lines: order.lines || []
       });
     } else {
-      setFormData({ customerId: '', orderDate: new Date().toISOString().split('T')[0], deliveryDate: '', salesPerson: '', status: 'pending', remark: '', lines: [] });
+      setFormData({ 
+        orderNo: generateOrderNo(),
+        customerId: '', 
+        orderDate: new Date().toISOString().split('T')[0], 
+        deliveryDate: '', 
+        salesPerson: '', 
+        status: 'pending', 
+        remark: '', 
+        lines: [] 
+      });
     }
     setShowModal(true);
   };
@@ -1172,41 +1340,52 @@ const SalesOrderManagementPage = memo(() => {
     setFormData({ ...formData, lines: formData.lines.filter((_, i) => i !== idx) });
   };
 
-  const filtered = orders.filter(o => !keyword || o.orderNo?.includes(keyword) || o.customerName?.includes(keyword));
+  // 过滤
+  const filtered = orders.filter(o => {
+    if (statusFilter !== 'all' && o.status !== statusFilter) return false;
+    if (keyword && !o.orderNo?.includes(keyword) && !o.customerName?.includes(keyword)) return false;
+    return true;
+  });
 
-  // 获取产品选项 - 兼容不同的字段名
-  const getProductOptions = () => {
-    return products.map(p => ({
-      value: p.id || p.productId || p.productCode,
-      label: p.name || p.productName || `${p.productCode} - ${p.name}`
-    }));
-  };
+  const getProductOptions = () => products.map(p => ({
+    value: p.id || p.productId || p.productCode,
+    label: p.name || p.productName || `${p.productCode} - ${p.name}`
+  }));
 
-  // 获取客户选项 - 兼容不同的字段名
-  const getCustomerOptions = () => {
-    return customers.map(c => ({
-      value: c.id || c.customerId,
-      label: c.name || c.customerName
-    }));
-  };
+  const getCustomerOptions = () => customers.map(c => ({
+    value: c.id || c.customerId,
+    label: c.name || c.customerName
+  }));
 
   if (loading) return <LoadingScreen />;
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0' }}>业务订单管理</h1>
-          <p style={{ fontSize: '15px', color: '#64748b', margin: 0 }}>管理销售订单信息</p>
+          <p style={{ fontSize: '15px', color: '#64748b', margin: 0 }}>管理销售订单和状态流转</p>
         </div>
         <Button icon={Plus} onClick={() => openModal()}>新增订单</Button>
       </div>
 
       <Card style={{ marginBottom: '16px' }}>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <div style={{ flex: 1, position: 'relative' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '200px', position: 'relative' }}>
             <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-            <input type="text" placeholder="搜索订单号或客户..." value={keyword} onChange={(e) => setKeyword(e.target.value)} style={{ width: '100%', padding: '12px 14px 12px 42px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', boxSizing: 'border-box' }} />
+            <input type="text" placeholder="搜索订单号或客户..." value={keyword} onChange={(e) => setKeyword(e.target.value)} 
+              style={{ width: '100%', padding: '12px 14px 12px 42px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', boxSizing: 'border-box' }} />
+          </div>
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+            {['all', 'pending', 'confirmed', 'processing', 'shipped', 'completed'].map(status => (
+              <button key={status} onClick={() => setStatusFilter(status)} style={{
+                padding: '10px 16px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px',
+                background: statusFilter === status ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : '#f1f5f9',
+                color: statusFilter === status ? '#fff' : '#374151'
+              }}>
+                {status === 'all' ? '全部' : SO_STATUS[status]?.text}
+              </button>
+            ))}
           </div>
           <Button variant="secondary" icon={RefreshCw} onClick={fetchData}>刷新</Button>
         </div>
@@ -1230,46 +1409,79 @@ const SalesOrderManagementPage = memo(() => {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(order => (
-                  <tr key={order.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '16px', fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>{order.orderNo}</td>
-                    <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{order.customerName}</td>
-                    <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{formatDate(order.orderDate)}</td>
-                    <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{formatDate(order.deliveryDate)}</td>
-                    <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{order.salesPerson || '-'}</td>
-                    <td style={{ padding: '16px', textAlign: 'center' }}><StatusTag status={order.status} statusMap={SO_STATUS} /></td>
-                    <td style={{ padding: '16px', textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                        <Button size="sm" variant="secondary" icon={Edit} onClick={() => openModal(order)}>编辑</Button>
-                        <Button size="sm" variant="danger" icon={Trash2} onClick={() => handleDelete(order.id)}>删除</Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map(order => {
+                  const statusInfo = SO_STATUS[order.status];
+                  return (
+                    <tr key={order.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '16px', fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>{order.orderNo}</td>
+                      <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{order.customerName}</td>
+                      <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{formatDate(order.orderDate)}</td>
+                      <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{formatDate(order.deliveryDate)}</td>
+                      <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{order.salesPerson || '-'}</td>
+                      <td style={{ padding: '16px', textAlign: 'center' }}><StatusTag status={order.status} statusMap={SO_STATUS} /></td>
+                      <td style={{ padding: '16px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                          {/* 状态流转按钮 */}
+                          {statusInfo?.next && (
+                            <Button size="sm" variant="success" icon={ArrowRight} onClick={() => handleStatusChange(order, statusInfo.next)}>
+                              {SO_STATUS[statusInfo.next]?.text}
+                            </Button>
+                          )}
+                          <Button size="sm" variant="secondary" icon={Edit} onClick={() => openModal(order)}>编辑</Button>
+                          {order.status === 'pending' && (
+                            <Button size="sm" variant="danger" icon={Trash2} onClick={() => handleDelete(order.id)}>删除</Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
       </Card>
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingOrder ? '编辑订单' : '新增订单'} width="700px">
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingOrder ? '编辑订单' : '新增订单'} size="large">
+        {/* 订单号显示 */}
+        {editingOrder && (
+          <div style={{ marginBottom: '16px', padding: '12px 16px', background: '#f8fafc', borderRadius: '8px' }}>
+            <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>订单号</div>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>{formData.orderNo}</div>
+          </div>
+        )}
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <Select label="客户" value={formData.customerId} onChange={v => setFormData({ ...formData, customerId: v })} required options={getCustomerOptions()} />
           <Input label="业务员" value={formData.salesPerson} onChange={v => setFormData({ ...formData, salesPerson: v })} />
           <Input label="下单日期" type="date" value={formData.orderDate} onChange={v => setFormData({ ...formData, orderDate: v })} required />
           <Input label="交付日期" type="date" value={formData.deliveryDate} onChange={v => setFormData({ ...formData, deliveryDate: v })} required />
         </div>
-        <Select label="状态" value={formData.status} onChange={v => setFormData({ ...formData, status: v })} options={Object.entries(SO_STATUS).map(([k, v]) => ({ value: k, label: v.text }))} />
+        
+        {/* 状态选择 */}
+        <Select label="订单状态" value={formData.status} onChange={v => setFormData({ ...formData, status: v })} 
+          options={Object.entries(SO_STATUS).map(([k, v]) => ({ value: k, label: v.text }))} />
+
+        {/* 状态流转说明 */}
+        <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', marginBottom: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>状态流转说明</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#374151', flexWrap: 'wrap' }}>
+            <span style={{ padding: '4px 8px', background: SO_STATUS.pending.bgColor, color: SO_STATUS.pending.color, borderRadius: '4px' }}>待处理</span>
+            <span>→</span>
+            <span style={{ padding: '4px 8px', background: SO_STATUS.confirmed.bgColor, color: SO_STATUS.confirmed.color, borderRadius: '4px' }}>已确认</span>
+            <span>→</span>
+            <span style={{ padding: '4px 8px', background: SO_STATUS.processing.bgColor, color: SO_STATUS.processing.color, borderRadius: '4px' }}>处理中</span>
+            <span>→</span>
+            <span style={{ padding: '4px 8px', background: SO_STATUS.shipped.bgColor, color: SO_STATUS.shipped.color, borderRadius: '4px' }}>已发货</span>
+            <span>→</span>
+            <span style={{ padding: '4px 8px', background: SO_STATUS.completed.bgColor, color: SO_STATUS.completed.color, borderRadius: '4px' }}>已完成</span>
+          </div>
+        </div>
         
         <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid #e2e8f0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>订单明细</h4>
             <Button size="sm" variant="secondary" icon={Plus} onClick={addLine}>添加产品</Button>
-          </div>
-          
-          {/* 显示可用产品数量提示 */}
-          <div style={{ marginBottom: '12px', fontSize: '12px', color: '#64748b' }}>
-            可选产品: {products.length} 个
           </div>
           
           {formData.lines.length === 0 ? (
