@@ -1095,7 +1095,7 @@ const PurchaseOrderManagementPage = memo(() => {
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [formData, setFormData] = useState({
-    materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: '', expectedDate: '', status: 'draft', remark: ''
+    poNo: '', materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: '', expectedDate: '', status: 'draft', remark: ''
   });
 
   const fetchData = useCallback(async () => {
@@ -1113,10 +1113,23 @@ const PurchaseOrderManagementPage = memo(() => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // 生成采购单号
+  const generatePoNo = () => {
+    const today = new Date();
+    const prefix = `PO${today.getFullYear()}-`;
+    const seq = String(Math.floor(Math.random() * 10000)).padStart(3, '0');
+    return prefix + seq;
+  };
+
   const handleSubmit = async () => {
+    const submitData = {
+      ...formData,
+      poNo: formData.poNo || generatePoNo(),  // 新增时自动生成单号
+      totalAmount: formData.quantity * formData.unitPrice
+    };
     const endpoint = editingOrder ? `/api/purchase-orders/${editingOrder.id}` : '/api/purchase-orders';
     const method = editingOrder ? 'PUT' : 'POST';
-    const res = await request(endpoint, { method, body: JSON.stringify({ ...formData, totalAmount: formData.quantity * formData.unitPrice }) });
+    const res = await request(endpoint, { method, body: JSON.stringify(submitData) });
     if (res.success) { setShowModal(false); fetchData(); }
     else alert(res.message || '操作失败');
   };
@@ -1133,12 +1146,14 @@ const PurchaseOrderManagementPage = memo(() => {
     const res = await request(`/api/purchase-orders/${order.id}`, { 
       method: 'PUT', 
       body: JSON.stringify({ 
+        poNo: order.poNo,  // 必须传递采购单号
         materialId: order.materialId,
         supplierId: order.supplierId,
         quantity: order.quantity,
         unitPrice: order.unitPrice,
         orderDate: order.orderDate,
         expectedDate: order.expectedDate,
+        actualDate: newStatus === 'arrived' ? new Date().toISOString().split('T')[0] : order.actualDate,  // 到货时自动设置实际到货日期
         totalAmount: order.totalAmount,
         remark: order.remark || '',
         status: newStatus 
@@ -1152,12 +1167,17 @@ const PurchaseOrderManagementPage = memo(() => {
     setEditingOrder(order);
     if (order) {
       setFormData({
+        poNo: order.poNo,  // 保存原采购单号
         materialId: order.materialId, supplierId: order.supplierId, quantity: order.quantity, unitPrice: order.unitPrice || 0,
         orderDate: formatDateInput(order.orderDate), expectedDate: formatDateInput(order.expectedDate), 
         status: order.status || 'draft', remark: order.remark || ''
       });
     } else {
-      setFormData({ materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: new Date().toISOString().split('T')[0], expectedDate: '', status: 'draft', remark: '' });
+      // 新增时自动生成单号
+      const today = new Date();
+      const prefix = `PO${today.getFullYear()}-`;
+      const seq = String(Math.floor(Math.random() * 10000)).padStart(3, '0');
+      setFormData({ poNo: prefix + seq, materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: new Date().toISOString().split('T')[0], expectedDate: '', status: 'draft', remark: '' });
     }
     setShowModal(true);
   };
@@ -1251,6 +1271,13 @@ const PurchaseOrderManagementPage = memo(() => {
       </Card>
 
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingOrder ? '编辑采购单' : '新增采购单'}>
+        {/* 采购单号 - 编辑时只读显示 */}
+        {editingOrder && (
+          <div style={{ marginBottom: '16px', padding: '12px 16px', background: '#f8fafc', borderRadius: '8px' }}>
+            <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>采购单号</div>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>{formData.poNo}</div>
+          </div>
+        )}
         <Select label="物料" value={formData.materialId} onChange={v => setFormData({ ...formData, materialId: v })} required options={materials.map(m => ({ value: m.id, label: `${m.materialCode} - ${m.name}` }))} />
         <Select label="供应商" value={formData.supplierId} onChange={v => setFormData({ ...formData, supplierId: v })} required options={suppliers.map(s => ({ value: s.id, label: s.name }))} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
