@@ -198,11 +198,16 @@ export default defineConfig(({ mode }) => {
 
     // 预览服务器配置
     preview: {
-      port: 4173,
-      host: true,
-      cors: true
-    },
+  port: 4173,
+  host: true,
+  cors: true,
 
+  // ✨ 新增，允许 Railway 的前端域名访问
+  allowedHosts: [
+    'supply-dashboard-production.up.railway.app'
+  ]
+    }
+,
     // Esbuild 配置
     esbuild: {
       drop: isProd ? ['console', 'debugger'] : [],
