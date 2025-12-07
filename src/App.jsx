@@ -1,137 +1,10 @@
 import React, { useState, useMemo, useCallback, useEffect, createContext, useContext, memo, useRef } from 'react';
 import { AlertCircle, Package, TrendingUp, TrendingDown, ChevronLeft, CheckCircle, AlertTriangle, XCircle, Clock, Factory, Users, Calendar, Box, Truck, AlertOctagon, Filter, ChevronRight, Layers, ShoppingCart, LogOut, User, Menu, X, Home, FileText, Settings, Warehouse, Building, UserPlus, Edit, Trash2, Plus, Save, Search, RefreshCw, Zap, Eye, Play, Send, Check, ArrowRight } from 'lucide-react';
-
-// ============ 常量配置 ============
-const BASE_URL = 'https://supply-backend-production.up.railway.app';
-
-// 采购订单状态
-const PO_STATUS = {
-  draft: { text: '草稿', color: '#64748b', bgColor: '#f1f5f9', next: 'confirmed' },
-  confirmed: { text: '已确认', color: '#3b82f6', bgColor: '#dbeafe', next: 'producing' },
-  producing: { text: '生产中', color: '#f59e0b', bgColor: '#fef3c7', next: 'shipped' },
-  shipped: { text: '已发货', color: '#8b5cf6', bgColor: '#ede9fe', next: 'arrived' },
-  arrived: { text: '已到货', color: '#10b981', bgColor: '#d1fae5', next: null },
-  cancelled: { text: '已取消', color: '#ef4444', bgColor: '#fee2e2', next: null }
-};
-
-// 销售订单状态
-const SO_STATUS = {
-  pending: { text: '待处理', color: '#64748b', bgColor: '#f1f5f9', next: 'confirmed' },
-  confirmed: { text: '已确认', color: '#3b82f6', bgColor: '#dbeafe', next: 'processing' },
-  processing: { text: '处理中', color: '#f59e0b', bgColor: '#fef3c7', next: 'shipped' },
-  shipped: { text: '已发货', color: '#8b5cf6', bgColor: '#ede9fe', next: 'completed' },
-  completed: { text: '已完成', color: '#10b981', bgColor: '#d1fae5', next: null },
-  cancelled: { text: '已取消', color: '#ef4444', bgColor: '#fee2e2', next: null }
-};
-
-// 风险等级
-const RISK = {
-  none: { level: 0, text: '正常', color: '#10b981', bgColor: '#d1fae5' },
-  low: { level: 1, text: '低风险', color: '#f59e0b', bgColor: '#fef3c7' },
-  medium: { level: 2, text: '中风险', color: '#f97316', bgColor: '#ffedd5' },
-  high: { level: 3, text: '高风险', color: '#ef4444', bgColor: '#fee2e2' }
-};
-
-// 日期工具函数
-const TODAY = new Date();
-TODAY.setHours(0, 0, 0, 0);
-
-const daysDiff = (date1, date2) => {
-  const d1 = new Date(date1);
-  const d2 = new Date(date2);
-  d1.setHours(0, 0, 0, 0);
-  d2.setHours(0, 0, 0, 0);
-  return Math.ceil((d2 - d1) / (1000 * 60 * 60 * 24));
-};
-
-const formatDate = (dateStr) => {
-  if (!dateStr) return '-';
-  const d = new Date(dateStr);
-  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
-};
-
-const formatDateInput = (dateStr) => {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  return d.toISOString().split('T')[0];
-};
-
-// ============ 认证上下文 ============
-const AuthContext = createContext(null);
-
-const AuthProvider = ({ children }) => {
-  const [token, setToken] = useState(() => localStorage.getItem('token'));
-  const [user, setUser] = useState(() => {
-    const saved = localStorage.getItem('user');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [isLoading, setIsLoading] = useState(false);
-
-  const login = async (username, password) => {
-    setIsLoading(true);
-    try {
-      const res = await fetch(`${BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      const data = await res.json();
-      if (data.success && data.data?.token) {
-        setToken(data.data.token);
-        setUser(data.data.user);
-        localStorage.setItem('token', data.data.token);
-        localStorage.setItem('user', JSON.stringify(data.data.user));
-        setIsLoading(false);
-        return { success: true };
-      }
-      setIsLoading(false);
-      return { success: false, message: data.message || '登录失败' };
-    } catch (e) {
-      setIsLoading(false);
-      return { success: false, message: '网络错误' };
-    }
-  };
-
-  const logout = () => {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-  };
-
-  const isAuthenticated = !!token;
-
-  return <AuthContext.Provider value={{ token, user, login, logout, isAuthenticated, isLoading }}>{children}</AuthContext.Provider>;
-};
-
-const useAuth = () => useContext(AuthContext);
-
-// ============ API Hook ============
-const useApi = () => {
-  const { token, logout } = useAuth();
-  
-  const request = useCallback(async (endpoint, options = {}) => {
-    try {
-      const res = await fetch(`${BASE_URL}${endpoint}`, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          ...options.headers
-        }
-      });
-      if (res.status === 401) {
-        logout();
-        return { success: false, message: '登录已过期' };
-      }
-      return await res.json();
-    } catch (e) {
-      return { success: false, message: '网络错误' };
-    }
-  }, [token, logout]);
-
-  return { request };
-};
+// 在第2行添加这些
+import { BASE_URL, RISK, PO_STATUS, SO_STATUS } from './config/constants';
+import { debounce, formatDate, formatDateInput, createRiskCalculator, highestRisk, TODAY, daysDiff } from './utils/helpers';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { useApi } from './hooks/useApi';
 
 // ============ API 配置 ============
 
@@ -213,11 +86,10 @@ const LoginPage = memo(() => {
             alignItems: 'center', 
             justifyContent: 'center',
             boxShadow: '0 10px 25px rgba(59, 130, 246, 0.3)',
-            overflow: 'hidden'
           }}>
-            <img src="/logo.png" alt="Logo" style={{ width: '50px', height: '50px', objectFit: 'contain' }} />
+            <Factory size={36} style={{ color: '#fff' }} />
           </div>
-          <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', margin: 0 }}>百汇供应链管理系统</h1>
+          <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', margin: 0 }}>供应链管理系统</h1>
           <p style={{ fontSize: '15px', color: '#64748b', marginTop: '8px', fontWeight: 500 }}>请登录您的账号</p>
         </div>
 
@@ -556,8 +428,8 @@ const EmptyState = memo(({ icon: Icon, title, description }) => (
 const LoadingScreen = memo(() => (
   <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
     <div style={{ textAlign: 'center' }}>
-      <div style={{ width: '80px', height: '80px', margin: '0 auto 32px', background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse 2s infinite', overflow: 'hidden' }}>
-        <img src="/logo.png" alt="Logo" style={{ width: '55px', height: '55px', objectFit: 'contain' }} />
+      <div style={{ width: '80px', height: '80px', margin: '0 auto 32px', background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse 2s infinite' }}>
+        <Factory size={40} style={{ color: '#fff' }} />
       </div>
       <div style={{ fontSize: '20px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>加载中</div>
       <div style={{ fontSize: '14px', color: '#64748b', fontWeight: 500 }}>正在获取数据...</div>
@@ -622,13 +494,13 @@ const Sidebar = memo(({ currentPage, onNavigate, collapsed, onToggle }) => {
       boxShadow: '4px 0 24px rgba(0,0,0,0.12)'
     }}>
       <div style={{ padding: '24px', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{ width: '44px', height: '44px', background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
-          <img src="/logo.png" alt="Logo" style={{ width: '30px', height: '30px', objectFit: 'contain' }} />
+        <div style={{ width: '44px', height: '44px', background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Factory size={22} style={{ color: '#fff' }} />
         </div>
         {!collapsed && (
           <div>
-            <div style={{ fontSize: '17px', fontWeight: 700, color: '#fff' }}>百汇供应链</div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>BAIHUI SCM</div>
+            <div style={{ fontSize: '17px', fontWeight: 700, color: '#fff' }}>供应链管理</div>
+            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>CONTROL CENTER</div>
           </div>
         )}
       </div>
@@ -702,7 +574,7 @@ const DashboardPage = memo(({ data, onNav }) => {
     <div>
       <div style={{ marginBottom: '32px' }}>
         <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0' }}>仪表板</h1>
-        <p style={{ fontSize: '15px', color: '#64748b', margin: 0 }}>百汇供应链风险监控概览</p>
+        <p style={{ fontSize: '15px', color: '#64748b', margin: 0 }}>供应链风险监控概览</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '32px' }}>
@@ -938,312 +810,68 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
 
 // ============ 预警页面 ============
 const WarningsPage = memo(({ data }) => {
-  const { request } = useApi();
   const { mats = [] } = data;
-  const [warningType, setWarningType] = useState('material'); // 'material' | 'product' | 'delivery'
   const [levelFilter, setLevelFilter] = useState('all');
-  const [productInventory, setProductInventory] = useState([]);
-  const [salesOrders, setSalesOrders] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  // 获取产品库存和销售订单数据
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // 获取销售订单
-        const ordersRes = await request('/api/sales-orders');
-        if (ordersRes.success) setSalesOrders(ordersRes.data?.list || ordersRes.data || []);
-        
-        // 尝试获取产品库存
-        let products = [];
-        try {
-          const invRes = await request('/api/inventory?type=product');
-          if (invRes.success) {
-            products = invRes.data?.list || invRes.data || [];
-          }
-        } catch (e) {
-          console.log('inventory API不可用');
-        }
-        
-        // 如果没有数据，从products获取
-        if (products.length === 0) {
-          try {
-            const prodRes = await request('/api/products');
-            if (prodRes.success) {
-              const prodList = prodRes.data?.list || prodRes.data || [];
-              products = prodList.map(p => ({
-                productCode: p.productCode || p.product_code,
-                productName: p.name || p.productName,
-                quantity: p.stock || p.inventory || 0,
-                safetyStock: p.safetyStock || p.safety_stock || 100,
-                warehouseName: '主仓库'
-              }));
-            }
-          } catch (e) {
-            console.log('获取产品失败');
-          }
-        }
-        setProductInventory(products);
-      } catch (e) {
-        console.error('获取数据失败:', e);
-      }
-      setLoading(false);
-    };
-    fetchData();
-  }, [request]);
-
-  // 物料库存预警
-  const materialWarnings = useMemo(() => {
+  
+  const warnings = useMemo(() => {
     return mats.filter(m => m.inv < m.safe).map(m => ({
       level: m.inv < m.safe * 0.5 ? 'RED' : m.inv < m.safe * 0.8 ? 'ORANGE' : 'YELLOW',
-      code: m.code,
-      name: m.name,
+      matCode: m.code,
+      matName: m.name,
       stockQty: m.inv,
       safetyStock: m.safe,
-      shortage: m.safe - m.inv,
       buyer: m.buyer
     }));
   }, [mats]);
 
-  // 产品库存预警
-  const productWarnings = useMemo(() => {
-    return productInventory.filter(p => {
-      const qty = p.quantity || 0;
-      const safe = p.safetyStock || p.safety_stock || 0;
-      return safe > 0 && qty < safe;
-    }).map(p => {
-      const qty = p.quantity || 0;
-      const safe = p.safetyStock || p.safety_stock || 0;
-      return {
-        level: qty < safe * 0.5 ? 'RED' : qty < safe * 0.8 ? 'ORANGE' : 'YELLOW',
-        code: p.productCode || p.product_code,
-        name: p.productName || p.product_name,
-        stockQty: qty,
-        safetyStock: safe,
-        shortage: safe - qty,
-        warehouse: p.warehouseName || p.warehouse_name || '-'
-      };
-    });
-  }, [productInventory]);
-
-  // 交期预警（订单即将到期或已过期）
-  const deliveryWarnings = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    return salesOrders.filter(o => {
-      if (o.status === 'completed' || o.status === 'cancelled') return false;
-      if (!o.deliveryDate && !o.delivery_date) return false;
-      const deliveryDate = new Date(o.deliveryDate || o.delivery_date);
-      const daysUntil = Math.ceil((deliveryDate - today) / (1000 * 60 * 60 * 24));
-      return daysUntil <= 7; // 7天内到期的订单
-    }).map(o => {
-      const deliveryDate = new Date(o.deliveryDate || o.delivery_date);
-      const daysUntil = Math.ceil((deliveryDate - today) / (1000 * 60 * 60 * 24));
-      return {
-        level: daysUntil < 0 ? 'RED' : daysUntil <= 2 ? 'ORANGE' : 'YELLOW',
-        orderNo: o.orderNo || o.order_no,
-        customer: o.customerName || o.customer_name,
-        deliveryDate: o.deliveryDate || o.delivery_date,
-        daysUntil,
-        status: o.status,
-        totalAmount: o.totalAmount || o.total_amount || 0
-      };
-    }).sort((a, b) => a.daysUntil - b.daysUntil);
-  }, [salesOrders]);
-
-  // 当前显示的预警
-  const currentWarnings = warningType === 'material' ? materialWarnings : 
-                          warningType === 'product' ? productWarnings : deliveryWarnings;
-  const filtered = levelFilter === 'all' ? currentWarnings : currentWarnings.filter(w => w.level === levelFilter);
-
+  const filtered = levelFilter === 'all' ? warnings : warnings.filter(w => w.level === levelFilter);
   const levelColors = { RED: '#ef4444', ORANGE: '#f97316', YELLOW: '#eab308' };
   const levelTexts = { RED: '红色预警', ORANGE: '橙色预警', YELLOW: '黄色预警' };
-  const statusTexts = { pending: '待处理', processing: '处理中', shipped: '已发货' };
 
   return (
     <div>
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0' }}>库存与交期预警</h1>
-        <p style={{ fontSize: '15px', color: '#64748b', margin: 0 }}>监控库存不足和订单交期风险</p>
+        <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0' }}>库存预警</h1>
+        <p style={{ fontSize: '15px', color: '#64748b', margin: 0 }}>库存低于安全库存的物料</p>
       </div>
 
-      {/* 预警类型统计卡片 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <Card style={{ cursor: 'pointer', border: warningType === 'material' ? '2px solid #3b82f6' : '2px solid transparent', transition: 'all 0.2s' }}
-          onClick={() => { setWarningType('material'); setLevelFilter('all'); }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ width: '48px', height: '48px', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Box size={24} style={{ color: '#fff' }} />
-            </div>
-            <div>
-              <div style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a' }}>{materialWarnings.length}</div>
-              <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>物料库存预警</div>
-            </div>
-          </div>
-        </Card>
-        <Card style={{ cursor: 'pointer', border: warningType === 'product' ? '2px solid #10b981' : '2px solid transparent', transition: 'all 0.2s' }}
-          onClick={() => { setWarningType('product'); setLevelFilter('all'); }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ width: '48px', height: '48px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Package size={24} style={{ color: '#fff' }} />
-            </div>
-            <div>
-              <div style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a' }}>{productWarnings.length}</div>
-              <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>产品库存预警</div>
-            </div>
-          </div>
-        </Card>
-        <Card style={{ cursor: 'pointer', border: warningType === 'delivery' ? '2px solid #f59e0b' : '2px solid transparent', transition: 'all 0.2s' }}
-          onClick={() => { setWarningType('delivery'); setLevelFilter('all'); }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ width: '48px', height: '48px', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Calendar size={24} style={{ color: '#fff' }} />
-            </div>
-            <div>
-              <div style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a' }}>{deliveryWarnings.length}</div>
-              <div style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>交期预警</div>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* 级别筛选 */}
       <Card style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 600, marginRight: '8px' }}>
-            {warningType === 'material' ? '物料库存预警' : warningType === 'product' ? '产品库存预警' : '订单交期预警'}：
-          </span>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {['all', 'RED', 'ORANGE', 'YELLOW'].map(level => (
-            <button key={level} onClick={() => setLevelFilter(level)} style={{ 
-              padding: '10px 18px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px',
-              background: levelFilter === level ? (level === 'all' ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : levelColors[level]) : '#f1f5f9', 
-              color: levelFilter === level ? '#fff' : '#374151' 
-            }}>
-              {level === 'all' ? `全部 (${currentWarnings.length})` : `${levelTexts[level]} (${currentWarnings.filter(w => w.level === level).length})`}
+            <button key={level} onClick={() => setLevelFilter(level)} style={{ padding: '10px 18px', borderRadius: '10px', border: 'none', background: levelFilter === level ? (level === 'all' ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : levelColors[level]) : '#f1f5f9', color: levelFilter === level ? '#fff' : '#374151', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}>
+              {level === 'all' ? `全部 (${warnings.length})` : `${levelTexts[level]} (${warnings.filter(w => w.level === level).length})`}
             </button>
           ))}
         </div>
       </Card>
 
-      {/* 预警列表 */}
       <Card>
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>加载中...</div>
-        ) : filtered.length === 0 ? (
-          <EmptyState icon={CheckCircle} title="暂无预警" description={`当前没有${warningType === 'material' ? '物料库存' : warningType === 'product' ? '产品库存' : '交期'}预警`} />
+        {filtered.length === 0 ? (
+          <EmptyState icon={CheckCircle} title="暂无预警" description="当前没有库存预警" />
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            {/* 物料库存预警表格 */}
-            {warningType === 'material' && (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                    <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>级别</th>
-                    <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>物料</th>
-                    <th style={{ textAlign: 'right', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>当前库存</th>
-                    <th style={{ textAlign: 'right', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>安全库存</th>
-                    <th style={{ textAlign: 'right', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>缺口</th>
-                    <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>采购员</th>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                  <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>级别</th>
+                  <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>物料</th>
+                  <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>当前库存</th>
+                  <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>安全库存</th>
+                  <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>采购员</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((w, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '16px', textAlign: 'center' }}><span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', background: levelColors[w.level] }} /></td>
+                    <td style={{ padding: '16px' }}><div style={{ fontWeight: 600, color: '#0f172a' }}>{w.matName}</div><div style={{ fontSize: '12px', color: '#64748b' }}>{w.matCode}</div></td>
+                    <td style={{ padding: '16px', textAlign: 'center', fontWeight: 700, color: '#dc2626' }}>{w.stockQty.toLocaleString()}</td>
+                    <td style={{ padding: '16px', textAlign: 'center', color: '#64748b' }}>{w.safetyStock.toLocaleString()}</td>
+                    <td style={{ padding: '16px', color: '#374151', fontWeight: 500 }}>{w.buyer || '-'}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((w, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '16px', textAlign: 'center' }}>
-                        <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', background: levelColors[w.level] }} />
-                      </td>
-                      <td style={{ padding: '16px' }}>
-                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{w.name}</div>
-                        <div style={{ fontSize: '12px', color: '#64748b' }}>{w.code}</div>
-                      </td>
-                      <td style={{ padding: '16px', textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>{w.stockQty.toLocaleString()}</td>
-                      <td style={{ padding: '16px', textAlign: 'right', color: '#64748b' }}>{w.safetyStock.toLocaleString()}</td>
-                      <td style={{ padding: '16px', textAlign: 'right', fontWeight: 600, color: '#ef4444' }}>-{w.shortage.toLocaleString()}</td>
-                      <td style={{ padding: '16px', color: '#374151', fontWeight: 500 }}>{w.buyer || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-
-            {/* 产品库存预警表格 */}
-            {warningType === 'product' && (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                    <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>级别</th>
-                    <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>产品</th>
-                    <th style={{ textAlign: 'right', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>当前库存</th>
-                    <th style={{ textAlign: 'right', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>安全库存</th>
-                    <th style={{ textAlign: 'right', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>缺口</th>
-                    <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>仓库</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((w, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '16px', textAlign: 'center' }}>
-                        <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', background: levelColors[w.level] }} />
-                      </td>
-                      <td style={{ padding: '16px' }}>
-                        <div style={{ fontWeight: 600, color: '#0f172a' }}>{w.name}</div>
-                        <div style={{ fontSize: '12px', color: '#64748b' }}>{w.code}</div>
-                      </td>
-                      <td style={{ padding: '16px', textAlign: 'right', fontWeight: 700, color: '#dc2626' }}>{w.stockQty.toLocaleString()}</td>
-                      <td style={{ padding: '16px', textAlign: 'right', color: '#64748b' }}>{w.safetyStock.toLocaleString()}</td>
-                      <td style={{ padding: '16px', textAlign: 'right', fontWeight: 600, color: '#ef4444' }}>-{w.shortage.toLocaleString()}</td>
-                      <td style={{ padding: '16px', color: '#374151', fontWeight: 500 }}>{w.warehouse}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-
-            {/* 交期预警表格 */}
-            {warningType === 'delivery' && (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                    <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>级别</th>
-                    <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>订单号</th>
-                    <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>客户</th>
-                    <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>交期</th>
-                    <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>剩余天数</th>
-                    <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>状态</th>
-                    <th style={{ textAlign: 'right', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>订单金额</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((w, idx) => (
-                    <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '16px', textAlign: 'center' }}>
-                        <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', background: levelColors[w.level] }} />
-                      </td>
-                      <td style={{ padding: '16px', fontWeight: 700, color: '#0f172a' }}>{w.orderNo}</td>
-                      <td style={{ padding: '16px', color: '#374151' }}>{w.customer}</td>
-                      <td style={{ padding: '16px', textAlign: 'center', color: '#64748b' }}>{formatDate(w.deliveryDate)}</td>
-                      <td style={{ padding: '16px', textAlign: 'center' }}>
-                        <span style={{
-                          padding: '4px 12px', borderRadius: '20px', fontSize: '13px', fontWeight: 700,
-                          background: w.daysUntil < 0 ? '#fef2f2' : w.daysUntil <= 2 ? '#fffbeb' : '#fefce8',
-                          color: w.daysUntil < 0 ? '#dc2626' : w.daysUntil <= 2 ? '#d97706' : '#ca8a04'
-                        }}>
-                          {w.daysUntil < 0 ? `已逾期 ${Math.abs(w.daysUntil)} 天` : w.daysUntil === 0 ? '今天到期' : `${w.daysUntil} 天`}
-                        </span>
-                      </td>
-                      <td style={{ padding: '16px', textAlign: 'center' }}>
-                        <span style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, background: '#f0fdf4', color: '#16a34a' }}>
-                          {statusTexts[w.status] || w.status}
-                        </span>
-                      </td>
-                      <td style={{ padding: '16px', textAlign: 'right', fontWeight: 600, color: '#10b981' }}>¥{w.totalAmount.toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </Card>
@@ -1281,30 +909,36 @@ const SalesOrderManagementPage = memo(() => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // 保存订单（创建或更新）
+  // 保存订单 - 简化版本
   const handleSubmit = async () => {
-    // 格式化日期
-    const formatDateForApi = (dateStr) => {
-      if (!dateStr) return null;
-      const d = new Date(dateStr);
-      return d.toISOString().split('T')[0];
-    };
-
+    // 只发送后端需要的基本字段
     const submitData = {
-      customerId: formData.customerId,
-      orderDate: formatDateForApi(formData.orderDate),
-      deliveryDate: formatDateForApi(formData.deliveryDate),
+      customerId: parseInt(formData.customerId) || formData.customerId,
+      orderDate: formData.orderDate,
+      deliveryDate: formData.deliveryDate,
       salesPerson: formData.salesPerson || '',
       status: formData.status || 'pending',
-      remark: formData.remark || '',
-      lines: formData.lines || []
+      remark: formData.remark || ''
     };
+    
+    // 只有新建时才发送lines
+    if (!editingOrder && formData.lines.length > 0) {
+      submitData.lines = formData.lines;
+    }
 
     const endpoint = editingOrder ? `/api/sales-orders/${editingOrder.id}` : '/api/sales-orders';
     const method = editingOrder ? 'PUT' : 'POST';
+    
+    console.log('提交数据:', submitData);
+    
     const res = await request(endpoint, { method, body: JSON.stringify(submitData) });
-    if (res.success) { setShowModal(false); fetchData(); }
-    else alert(res.message || '操作失败');
+    if (res.success) { 
+      setShowModal(false); 
+      fetchData(); 
+    } else {
+      console.error('保存失败:', res);
+      alert(res.message || '操作失败');
+    }
   };
 
   const handleDelete = async (id) => {
@@ -1314,46 +948,32 @@ const SalesOrderManagementPage = memo(() => {
     else alert(res.message || '删除失败');
   };
 
-  // 状态流转 - 只更新状态字段
+  // 状态流转 - 只更新状态
   const handleStatusChange = async (order, newStatus) => {
-    // 格式化日期
-    const formatDateForApi = (dateStr) => {
-      if (!dateStr) return null;
-      const d = new Date(dateStr);
-      return d.toISOString().split('T')[0];
-    };
-
-    // 构建更新数据，保持原有字段不变，只改状态
     const updateData = {
-      customerId: order.customerId || order.customer_id,
-      orderDate: formatDateForApi(order.orderDate || order.order_date),
-      deliveryDate: formatDateForApi(order.deliveryDate || order.delivery_date),
+      customerId: parseInt(order.customerId || order.customer_id),
+      orderDate: order.orderDate || order.order_date,
+      deliveryDate: order.deliveryDate || order.delivery_date,
       salesPerson: order.salesPerson || order.sales_person || '',
       status: newStatus,
-      remark: order.remark || '',
-      lines: order.lines || []
+      remark: order.remark || ''
     };
-
-    console.log('更新订单状态:', { id: order.id, newStatus, updateData });
-
+    
+    console.log('状态更新:', updateData);
+    
     const res = await request(`/api/sales-orders/${order.id}`, {
       method: 'PUT',
       body: JSON.stringify(updateData)
     });
-    
-    if (res.success) {
-      fetchData();
-    } else {
-      console.error('状态更新失败:', res);
-      alert(res.message || '状态更新失败');
-    }
+    if (res.success) fetchData();
+    else alert(res.message || '状态更新失败');
   };
 
   const openModal = (order = null) => {
     setEditingOrder(order);
     if (order) {
       setFormData({
-        customerId: order.customerId || order.customer_id, 
+        customerId: order.customerId || order.customer_id || '', 
         orderDate: formatDateInput(order.orderDate || order.order_date), 
         deliveryDate: formatDateInput(order.deliveryDate || order.delivery_date),
         salesPerson: order.salesPerson || order.sales_person || '', 
@@ -1362,15 +982,7 @@ const SalesOrderManagementPage = memo(() => {
         lines: order.lines || []
       });
     } else {
-      setFormData({ 
-        customerId: '', 
-        orderDate: new Date().toISOString().split('T')[0], 
-        deliveryDate: '', 
-        salesPerson: '', 
-        status: 'pending', 
-        remark: '', 
-        lines: [] 
-      });
+      setFormData({ customerId: '', orderDate: new Date().toISOString().split('T')[0], deliveryDate: '', salesPerson: '', status: 'pending', remark: '', lines: [] });
     }
     setShowModal(true);
   };
@@ -1432,7 +1044,7 @@ const SalesOrderManagementPage = memo(() => {
                 background: statusFilter === status ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : '#f1f5f9',
                 color: statusFilter === status ? '#fff' : '#374151'
               }}>
-                {status === 'all' ? '全部' : SO_STATUS[status]?.text}
+                {status === 'all' ? '全部' : (SO_STATUS[status]?.text || status)}
               </button>
             ))}
           </div>
@@ -1459,7 +1071,7 @@ const SalesOrderManagementPage = memo(() => {
               </thead>
               <tbody>
                 {filtered.map(order => {
-                  const statusInfo = SO_STATUS[order.status];
+                  const statusInfo = SO_STATUS[order.status] || {};
                   return (
                     <tr key={order.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                       <td style={{ padding: '16px', fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>{order.orderNo}</td>
@@ -1470,10 +1082,9 @@ const SalesOrderManagementPage = memo(() => {
                       <td style={{ padding: '16px', textAlign: 'center' }}><StatusTag status={order.status} statusMap={SO_STATUS} /></td>
                       <td style={{ padding: '16px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                          {/* 状态流转按钮 */}
-                          {statusInfo?.next && (
+                          {statusInfo.next && (
                             <Button size="sm" variant="success" icon={ArrowRight} onClick={() => handleStatusChange(order, statusInfo.next)}>
-                              {SO_STATUS[statusInfo.next]?.text}
+                              {(SO_STATUS[statusInfo.next]?.text) || statusInfo.next}
                             </Button>
                           )}
                           <Button size="sm" variant="secondary" icon={Edit} onClick={() => openModal(order)}>编辑</Button>
@@ -1491,39 +1102,33 @@ const SalesOrderManagementPage = memo(() => {
         )}
       </Card>
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingOrder ? '编辑订单' : '新增订单'} size="large">
-        {/* 订单号显示 - 编辑时显示原订单号 */}
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingOrder ? '编辑订单' : '新增订单'} width="700px">
         {editingOrder && (
           <div style={{ marginBottom: '16px', padding: '12px 16px', background: '#f8fafc', borderRadius: '8px' }}>
             <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>订单号</div>
-            <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>{editingOrder.orderNo || editingOrder.order_no}</div>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>{editingOrder.orderNo}</div>
           </div>
         )}
-
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <Select label="客户" value={formData.customerId} onChange={v => setFormData({ ...formData, customerId: v })} required options={getCustomerOptions()} />
           <Input label="业务员" value={formData.salesPerson} onChange={v => setFormData({ ...formData, salesPerson: v })} />
           <Input label="下单日期" type="date" value={formData.orderDate} onChange={v => setFormData({ ...formData, orderDate: v })} required />
           <Input label="交付日期" type="date" value={formData.deliveryDate} onChange={v => setFormData({ ...formData, deliveryDate: v })} required />
         </div>
+        <Select label="状态" value={formData.status} onChange={v => setFormData({ ...formData, status: v })} options={Object.entries(SO_STATUS).map(([k, v]) => ({ value: k, label: v.text }))} />
         
-        {/* 状态选择 */}
-        <Select label="订单状态" value={formData.status} onChange={v => setFormData({ ...formData, status: v })} 
-          options={Object.entries(SO_STATUS).map(([k, v]) => ({ value: k, label: v.text }))} />
-
-        {/* 状态流转说明 */}
-        <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', marginBottom: '16px' }}>
+        <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', marginTop: '16px' }}>
           <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>状态流转说明</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#374151', flexWrap: 'wrap' }}>
-            <span style={{ padding: '4px 8px', background: SO_STATUS.pending.bgColor, color: SO_STATUS.pending.color, borderRadius: '4px' }}>待处理</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', flexWrap: 'wrap' }}>
+            <span style={{ padding: '4px 8px', background: '#f1f5f9', color: '#64748b', borderRadius: '4px' }}>待确认</span>
             <span>→</span>
-            <span style={{ padding: '4px 8px', background: SO_STATUS.confirmed.bgColor, color: SO_STATUS.confirmed.color, borderRadius: '4px' }}>已确认</span>
+            <span style={{ padding: '4px 8px', background: '#dbeafe', color: '#3b82f6', borderRadius: '4px' }}>已确认</span>
             <span>→</span>
-            <span style={{ padding: '4px 8px', background: SO_STATUS.processing.bgColor, color: SO_STATUS.processing.color, borderRadius: '4px' }}>处理中</span>
+            <span style={{ padding: '4px 8px', background: '#fef3c7', color: '#f59e0b', borderRadius: '4px' }}>生产中</span>
             <span>→</span>
-            <span style={{ padding: '4px 8px', background: SO_STATUS.shipped.bgColor, color: SO_STATUS.shipped.color, borderRadius: '4px' }}>已发货</span>
+            <span style={{ padding: '4px 8px', background: '#ede9fe', color: '#8b5cf6', borderRadius: '4px' }}>已发货</span>
             <span>→</span>
-            <span style={{ padding: '4px 8px', background: SO_STATUS.completed.bgColor, color: SO_STATUS.completed.color, borderRadius: '4px' }}>已完成</span>
+            <span style={{ padding: '4px 8px', background: '#d1fae5', color: '#10b981', borderRadius: '4px' }}>已完成</span>
           </div>
         </div>
         
@@ -1573,7 +1178,7 @@ const PurchaseOrderManagementPage = memo(() => {
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [formData, setFormData] = useState({
-    poNo: '', materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: '', expectedDate: '', status: 'draft', remark: ''
+    materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: '', expectedDate: '', remark: ''
   });
 
   const fetchData = useCallback(async () => {
@@ -1591,23 +1196,10 @@ const PurchaseOrderManagementPage = memo(() => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // 生成采购单号
-  const generatePoNo = () => {
-    const today = new Date();
-    const prefix = `PO${today.getFullYear()}-`;
-    const seq = String(Math.floor(Math.random() * 10000)).padStart(3, '0');
-    return prefix + seq;
-  };
-
   const handleSubmit = async () => {
-    const submitData = {
-      ...formData,
-      poNo: formData.poNo || generatePoNo(),  // 新增时自动生成单号
-      totalAmount: formData.quantity * formData.unitPrice
-    };
     const endpoint = editingOrder ? `/api/purchase-orders/${editingOrder.id}` : '/api/purchase-orders';
     const method = editingOrder ? 'PUT' : 'POST';
-    const res = await request(endpoint, { method, body: JSON.stringify(submitData) });
+    const res = await request(endpoint, { method, body: JSON.stringify({ ...formData, totalAmount: formData.quantity * formData.unitPrice }) });
     if (res.success) { setShowModal(false); fetchData(); }
     else alert(res.message || '操作失败');
   };
@@ -1619,31 +1211,8 @@ const PurchaseOrderManagementPage = memo(() => {
     else alert(res.message || '删除失败');
   };
 
-  // 修改状态 - 直接用 PUT 更新整个订单
-  const handleStatusChange = async (order, newStatus) => {
-    // 格式化日期函数
-    const formatDateForApi = (dateStr) => {
-      if (!dateStr) return null;
-      const d = new Date(dateStr);
-      return d.toISOString().split('T')[0];
-    };
-    
-    const res = await request(`/api/purchase-orders/${order.id}`, { 
-      method: 'PUT', 
-      body: JSON.stringify({ 
-        poNo: order.poNo,
-        materialId: order.materialId,
-        supplierId: order.supplierId,
-        quantity: order.quantity,
-        unitPrice: order.unitPrice || 0,
-        orderDate: formatDateForApi(order.orderDate),
-        expectedDate: formatDateForApi(order.expectedDate),
-        actualDate: newStatus === 'arrived' ? new Date().toISOString().split('T')[0] : (order.actualDate ? formatDateForApi(order.actualDate) : null),
-        totalAmount: order.totalAmount || (order.quantity * (order.unitPrice || 0)),
-        remark: order.remark || '',
-        status: newStatus 
-      }) 
-    });
+  const handleStatusChange = async (id, newStatus) => {
+    const res = await request(`/api/purchase-orders/${id}/confirm`, { method: 'POST', body: JSON.stringify({ status: newStatus }) });
     if (res.success) fetchData();
     else alert(res.message || '状态更新失败');
   };
@@ -1652,17 +1221,11 @@ const PurchaseOrderManagementPage = memo(() => {
     setEditingOrder(order);
     if (order) {
       setFormData({
-        poNo: order.poNo,  // 保存原采购单号
         materialId: order.materialId, supplierId: order.supplierId, quantity: order.quantity, unitPrice: order.unitPrice || 0,
-        orderDate: formatDateInput(order.orderDate), expectedDate: formatDateInput(order.expectedDate), 
-        status: order.status || 'draft', remark: order.remark || ''
+        orderDate: formatDateInput(order.orderDate), expectedDate: formatDateInput(order.expectedDate), remark: order.remark || ''
       });
     } else {
-      // 新增时自动生成单号
-      const today = new Date();
-      const prefix = `PO${today.getFullYear()}-`;
-      const seq = String(Math.floor(Math.random() * 10000)).padStart(3, '0');
-      setFormData({ poNo: prefix + seq, materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: new Date().toISOString().split('T')[0], expectedDate: '', status: 'draft', remark: '' });
+      setFormData({ materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: new Date().toISOString().split('T')[0], expectedDate: '', remark: '' });
     }
     setShowModal(true);
   };
@@ -1734,9 +1297,8 @@ const PurchaseOrderManagementPage = memo(() => {
                       <td style={{ padding: '16px', textAlign: 'center' }}><StatusTag status={order.status} statusMap={PO_STATUS} /></td>
                       <td style={{ padding: '16px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                          {/* 状态流转按钮 - 显示下一个状态 */}
                           {statusInfo?.next && (
-                            <Button size="sm" variant="success" icon={ArrowRight} onClick={() => handleStatusChange(order, statusInfo.next)}>
+                            <Button size="sm" variant="success" icon={ArrowRight} onClick={() => handleStatusChange(order.id, statusInfo.next)}>
                               {PO_STATUS[statusInfo.next]?.text}
                             </Button>
                           )}
@@ -1756,13 +1318,6 @@ const PurchaseOrderManagementPage = memo(() => {
       </Card>
 
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingOrder ? '编辑采购单' : '新增采购单'}>
-        {/* 采购单号 - 编辑时只读显示 */}
-        {editingOrder && (
-          <div style={{ marginBottom: '16px', padding: '12px 16px', background: '#f8fafc', borderRadius: '8px' }}>
-            <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>采购单号</div>
-            <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>{formData.poNo}</div>
-          </div>
-        )}
         <Select label="物料" value={formData.materialId} onChange={v => setFormData({ ...formData, materialId: v })} required options={materials.map(m => ({ value: m.id, label: `${m.materialCode} - ${m.name}` }))} />
         <Select label="供应商" value={formData.supplierId} onChange={v => setFormData({ ...formData, supplierId: v })} required options={suppliers.map(s => ({ value: s.id, label: s.name }))} />
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -1773,36 +1328,10 @@ const PurchaseOrderManagementPage = memo(() => {
           <Input label="下单日期" type="date" value={formData.orderDate} onChange={v => setFormData({ ...formData, orderDate: v })} required />
           <Input label="预计到货日期" type="date" value={formData.expectedDate} onChange={v => setFormData({ ...formData, expectedDate: v })} required />
         </div>
-        
-        {/* 状态选择 - 编辑时可以修改状态 */}
-        <Select 
-          label="订单状态" 
-          value={formData.status} 
-          onChange={v => setFormData({ ...formData, status: v })} 
-          options={Object.entries(PO_STATUS).map(([key, val]) => ({ value: key, label: val.text }))} 
-        />
-        
         <div style={{ padding: '12px 16px', background: '#f0fdf4', borderRadius: '8px', marginBottom: '16px' }}>
           <div style={{ fontSize: '12px', color: '#64748b' }}>订单金额</div>
           <div style={{ fontSize: '20px', fontWeight: 700, color: '#10b981' }}>¥{(formData.quantity * formData.unitPrice).toLocaleString()}</div>
         </div>
-        
-        {/* 状态流转说明 */}
-        <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', marginBottom: '16px' }}>
-          <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>状态流转说明</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#374151', flexWrap: 'wrap' }}>
-            <span style={{ padding: '4px 8px', background: PO_STATUS.draft.bgColor, color: PO_STATUS.draft.color, borderRadius: '4px' }}>草稿</span>
-            <span>→</span>
-            <span style={{ padding: '4px 8px', background: PO_STATUS.confirmed.bgColor, color: PO_STATUS.confirmed.color, borderRadius: '4px' }}>已确认</span>
-            <span>→</span>
-            <span style={{ padding: '4px 8px', background: PO_STATUS.producing.bgColor, color: PO_STATUS.producing.color, borderRadius: '4px' }}>生产中</span>
-            <span>→</span>
-            <span style={{ padding: '4px 8px', background: PO_STATUS.shipped.bgColor, color: PO_STATUS.shipped.color, borderRadius: '4px' }}>已发货</span>
-            <span>→</span>
-            <span style={{ padding: '4px 8px', background: PO_STATUS.arrived.bgColor, color: PO_STATUS.arrived.color, borderRadius: '4px' }}>已到货</span>
-          </div>
-        </div>
-        
         <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'flex-end' }}>
           <Button variant="secondary" onClick={() => setShowModal(false)}>取消</Button>
           <Button icon={Save} onClick={handleSubmit}>保存</Button>
@@ -2056,10 +1585,6 @@ const ProductManagementPage = memo(() => (
       { key: 'name', label: '产品名称', required: true },
       { key: 'category', label: '类别' },
       { key: 'unit', label: '单位', defaultValue: 'PCS' },
-      { key: 'status', label: '状态', type: 'select', defaultValue: 'active', options: [
-        { value: 'active', label: '启用' },
-        { value: 'inactive', label: '停用' }
-      ]},
     ]}
   />
 ));
@@ -2106,456 +1631,24 @@ const SupplierManagementPage = memo(() => (
   />
 ));
 
-// ============ 仓库管理页面（带库存管理） ============
-const WarehouseManagementPage = memo(() => {
-  const { request } = useApi();
-  const [warehouses, setWarehouses] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [showInventoryModal, setShowInventoryModal] = useState(false);
-  const [editingWarehouse, setEditingWarehouse] = useState(null);
-  const [selectedWarehouse, setSelectedWarehouse] = useState(null);
-  const [inventory, setInventory] = useState({ materials: [], products: [] });
-  const [inventoryLoading, setInventoryLoading] = useState(false);
-  const [editingInventory, setEditingInventory] = useState(null);
-  const [inventoryForm, setInventoryForm] = useState({ quantity: 0, safetyStock: 0 });
-  const [inventoryTab, setInventoryTab] = useState('materials'); // 'materials' | 'products'
-  const [formData, setFormData] = useState({
-    warehouseCode: '', name: '', location: '', capacity: 0, manager: ''
-  });
-
-  const fetchWarehouses = useCallback(async () => {
-    setLoading(true);
-    const res = await request('/api/warehouses');
-    if (res.success) setWarehouses(res.data?.list || res.data || []);
-    setLoading(false);
-  }, [request]);
-
-  useEffect(() => { fetchWarehouses(); }, [fetchWarehouses]);
-
-  // 获取仓库库存 - 适配现有后端
-  const fetchInventory = async (warehouseId) => {
-    setInventoryLoading(true);
-    let materials = [];
-    let products = [];
-    
-    try {
-      // 尝试使用 /api/inventory 接口
-      const materialsRes = await request(`/api/inventory?warehouseId=${warehouseId}&type=material`);
-      if (materialsRes.success) {
-        materials = materialsRes.data?.list || materialsRes.data || [];
-      }
-    } catch (e) {
-      console.log('inventory API不可用，尝试从materials获取');
-    }
-
-    // 如果inventory接口不可用，尝试从materials获取
-    if (materials.length === 0) {
-      try {
-        const materialsRes = await request('/api/materials');
-        if (materialsRes.success) {
-          const matList = materialsRes.data?.list || materialsRes.data || [];
-          // 转换格式，只显示该仓库的物料（如果有仓库字段），否则显示所有
-          materials = matList.map(m => ({
-            id: m.id,
-            materialId: m.id,
-            materialCode: m.materialCode || m.material_code,
-            materialName: m.name || m.materialName,
-            quantity: m.currentStock || m.current_stock || m.inventory || 0,
-            safetyStock: m.safetyStock || m.safety_stock || 0,
-            unit: m.unit,
-            warehouseId: warehouseId
-          }));
-        }
-      } catch (e) {
-        console.error('获取物料失败:', e);
-      }
-    }
-
-    // 尝试获取产品库存
-    try {
-      const productsRes = await request(`/api/inventory?warehouseId=${warehouseId}&type=product`);
-      if (productsRes.success) {
-        products = productsRes.data?.list || productsRes.data || [];
-      }
-    } catch (e) {
-      console.log('产品库存API不可用');
-    }
-
-    // 如果产品库存API不可用，从products获取基本信息
-    if (products.length === 0) {
-      try {
-        const productsRes = await request('/api/products');
-        if (productsRes.success) {
-          const prodList = productsRes.data?.list || productsRes.data || [];
-          // 转换格式
-          products = prodList.map(p => ({
-            id: p.id,
-            productId: p.id,
-            productCode: p.productCode || p.product_code,
-            productName: p.name || p.productName,
-            quantity: p.stock || p.inventory || 0,
-            safetyStock: p.safetyStock || p.safety_stock || 100,
-            unit: p.unit || '件',
-            warehouseId: warehouseId
-          }));
-        }
-      } catch (e) {
-        console.error('获取产品失败:', e);
-      }
-    }
-
-    setInventory({ materials, products });
-    setInventoryLoading(false);
-  };
-
-  // 打开仓库编辑
-  const openWarehouseModal = (warehouse = null) => {
-    setEditingWarehouse(warehouse);
-    if (warehouse) {
-      setFormData({
-        warehouseCode: warehouse.warehouseCode || warehouse.warehouse_code || '',
-        name: warehouse.name || '',
-        location: warehouse.location || '',
-        capacity: warehouse.capacity || 0,
-        manager: warehouse.manager || ''
-      });
-    } else {
-      setFormData({ warehouseCode: '', name: '', location: '', capacity: 0, manager: '' });
-    }
-    setShowModal(true);
-  };
-
-  // 打开库存详情
-  const openInventoryModal = async (warehouse) => {
-    setSelectedWarehouse(warehouse);
-    setShowInventoryModal(true);
-    await fetchInventory(warehouse.id);
-  };
-
-  // 保存仓库
-  const handleSaveWarehouse = async () => {
-    const endpoint = editingWarehouse ? `/api/warehouses/${editingWarehouse.id}` : '/api/warehouses';
-    const method = editingWarehouse ? 'PUT' : 'POST';
-    const res = await request(endpoint, { method, body: JSON.stringify(formData) });
-    if (res.success) {
-      setShowModal(false);
-      fetchWarehouses();
-    } else {
-      alert(res.message || '保存失败');
-    }
-  };
-
-  // 删除仓库
-  const handleDeleteWarehouse = async (id) => {
-    if (!window.confirm('确定要删除该仓库吗？')) return;
-    const res = await request(`/api/warehouses/${id}`, { method: 'DELETE' });
-    if (res.success) fetchWarehouses();
-    else alert(res.message || '删除失败');
-  };
-
-  // 编辑库存
-  const openEditInventory = (item, type) => {
-    setEditingInventory({ ...item, type });
-    setInventoryForm({
-      quantity: item.quantity || 0,
-      safetyStock: item.safetyStock || item.safety_stock || 0
-    });
-  };
-
-  // 保存库存 - 适配现有后端
-  const handleSaveInventory = async () => {
-    if (!editingInventory) return;
-    
-    let success = false;
-    let errorMsg = '';
-
-    // 尝试方案1：使用 /api/inventory/:id
-    try {
-      const res = await request(`/api/inventory/${editingInventory.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          quantity: inventoryForm.quantity,
-          safetyStock: inventoryForm.safetyStock,
-          type: editingInventory.type
-        })
-      });
-      if (res.success) {
-        success = true;
-      } else {
-        errorMsg = res.message;
-      }
-    } catch (e) {
-      console.log('inventory API不可用，尝试materials API');
-    }
-
-    // 尝试方案2：如果是物料，使用 /api/materials/:id/inventory
-    if (!success && editingInventory.type === 'material' && editingInventory.materialId) {
-      try {
-        const res = await request(`/api/materials/${editingInventory.materialId}/inventory`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            currentStock: inventoryForm.quantity,
-            safetyStock: inventoryForm.safetyStock
-          })
-        });
-        if (res.success) {
-          success = true;
-        } else {
-          errorMsg = res.message || errorMsg;
-        }
-      } catch (e) {
-        console.log('materials/inventory API也不可用');
-      }
-    }
-
-    // 尝试方案3：直接更新物料
-    if (!success && editingInventory.type === 'material' && editingInventory.materialId) {
-      try {
-        const res = await request(`/api/materials/${editingInventory.materialId}`, {
-          method: 'PUT',
-          body: JSON.stringify({
-            currentStock: inventoryForm.quantity,
-            safetyStock: inventoryForm.safetyStock
-          })
-        });
-        if (res.success) {
-          success = true;
-        } else {
-          errorMsg = res.message || errorMsg;
-        }
-      } catch (e) {
-        errorMsg = '更新失败';
-      }
-    }
-
-    if (success) {
-      setEditingInventory(null);
-      fetchInventory(selectedWarehouse.id);
-    } else {
-      alert(errorMsg || '保存失败，库存API可能不可用');
-    }
-  };
-
-  if (loading) return <LoadingScreen />;
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0' }}>仓库管理</h1>
-          <p style={{ fontSize: '15px', color: '#64748b', margin: 0 }}>管理仓库信息和库存</p>
-        </div>
-        <Button icon={Plus} onClick={() => openWarehouseModal()}>新增仓库</Button>
-      </div>
-
-      {/* 仓库卡片网格 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
-        {warehouses.length === 0 ? (
-          <Card><EmptyState icon={Warehouse} title="暂无仓库" description="点击新增仓库按钮添加" /></Card>
-        ) : (
-          warehouses.map(wh => (
-            <Card key={wh.id} style={{ cursor: 'pointer', transition: 'all 0.2s', border: '2px solid transparent' }}
-              onClick={() => openInventoryModal(wh)}
-              onMouseEnter={e => e.currentTarget.style.borderColor = '#3b82f6'}
-              onMouseLeave={e => e.currentTarget.style.borderColor = 'transparent'}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-                <div style={{ width: '56px', height: '56px', background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Warehouse size={28} style={{ color: '#fff' }} />
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }} onClick={e => e.stopPropagation()}>
-                  <button onClick={() => openWarehouseModal(wh)} style={{ padding: '8px', borderRadius: '8px', border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer' }}>
-                    <Edit size={16} style={{ color: '#64748b' }} />
-                  </button>
-                  <button onClick={() => handleDeleteWarehouse(wh.id)} style={{ padding: '8px', borderRadius: '8px', border: '1px solid #fee2e2', background: '#fef2f2', cursor: 'pointer' }}>
-                    <Trash2 size={16} style={{ color: '#ef4444' }} />
-                  </button>
-                </div>
-              </div>
-              <div style={{ marginBottom: '12px' }}>
-                <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>{wh.warehouseCode || wh.warehouse_code}</div>
-                <div style={{ fontSize: '20px', fontWeight: 700, color: '#0f172a' }}>{wh.name}</div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
-                <div><span style={{ color: '#64748b' }}>位置：</span><span style={{ color: '#374151', fontWeight: 500 }}>{wh.location || '-'}</span></div>
-                <div><span style={{ color: '#64748b' }}>容量：</span><span style={{ color: '#374151', fontWeight: 500 }}>{wh.capacity || '-'}</span></div>
-                <div style={{ gridColumn: 'span 2' }}><span style={{ color: '#64748b' }}>管理员：</span><span style={{ color: '#374151', fontWeight: 500 }}>{wh.manager || '-'}</span></div>
-              </div>
-              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '8px', color: '#3b82f6', fontSize: '13px', fontWeight: 600 }}>
-                <Eye size={16} /> 点击查看库存详情
-              </div>
-            </Card>
-          ))
-        )}
-      </div>
-
-      {/* 仓库编辑模态框 */}
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingWarehouse ? '编辑仓库' : '新增仓库'}>
-        <Input label="仓库编码" value={formData.warehouseCode} onChange={v => setFormData({ ...formData, warehouseCode: v })} required />
-        <Input label="仓库名称" value={formData.name} onChange={v => setFormData({ ...formData, name: v })} required />
-        <Input label="位置" value={formData.location} onChange={v => setFormData({ ...formData, location: v })} />
-        <Input label="容量" type="number" value={formData.capacity} onChange={v => setFormData({ ...formData, capacity: parseInt(v) || 0 })} />
-        <Input label="管理员" value={formData.manager} onChange={v => setFormData({ ...formData, manager: v })} />
-        <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'flex-end' }}>
-          <Button variant="secondary" onClick={() => setShowModal(false)}>取消</Button>
-          <Button icon={Save} onClick={handleSaveWarehouse}>保存</Button>
-        </div>
-      </Modal>
-
-      {/* 库存详情模态框 */}
-      <Modal isOpen={showInventoryModal} onClose={() => { setShowInventoryModal(false); setEditingInventory(null); }} 
-        title={selectedWarehouse ? `${selectedWarehouse.name} - 库存管理` : '库存管理'} size="large">
-        
-        {/* 选项卡 */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '2px solid #f1f5f9', paddingBottom: '12px' }}>
-          <button onClick={() => setInventoryTab('materials')} style={{
-            padding: '10px 20px', borderRadius: '8px 8px 0 0', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '14px',
-            background: inventoryTab === 'materials' ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : '#f1f5f9',
-            color: inventoryTab === 'materials' ? '#fff' : '#64748b'
-          }}>
-            <Box size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
-            物料库存 ({inventory.materials.length})
-          </button>
-          <button onClick={() => setInventoryTab('products')} style={{
-            padding: '10px 20px', borderRadius: '8px 8px 0 0', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '14px',
-            background: inventoryTab === 'products' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : '#f1f5f9',
-            color: inventoryTab === 'products' ? '#fff' : '#64748b'
-          }}>
-            <Package size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
-            产品库存 ({inventory.products.length})
-          </button>
-        </div>
-
-        {inventoryLoading ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>加载中...</div>
-        ) : (
-          <>
-            {/* 物料库存表格 */}
-            {inventoryTab === 'materials' && (
-              inventory.materials.length === 0 ? (
-                <EmptyState icon={Box} title="暂无物料库存" description="该仓库还没有物料库存记录" />
-              ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                        <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>物料编码</th>
-                        <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>物料名称</th>
-                        <th style={{ textAlign: 'right', padding: '12px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>当前库存</th>
-                        <th style={{ textAlign: 'right', padding: '12px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>安全库存</th>
-                        <th style={{ textAlign: 'center', padding: '12px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>状态</th>
-                        <th style={{ textAlign: 'center', padding: '12px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>操作</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {inventory.materials.map(item => {
-                        const isLow = item.quantity < (item.safetyStock || item.safety_stock || 0);
-                        const isCritical = item.quantity < (item.safetyStock || item.safety_stock || 0) * 0.5;
-                        return (
-                          <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td style={{ padding: '12px', fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>{item.materialCode || item.material_code}</td>
-                            <td style={{ padding: '12px', fontSize: '13px', color: '#374151' }}>{item.materialName || item.material_name}</td>
-                            <td style={{ padding: '12px', fontSize: '14px', fontWeight: 700, textAlign: 'right', color: isCritical ? '#dc2626' : isLow ? '#f59e0b' : '#10b981' }}>
-                              {item.quantity?.toLocaleString()}
-                            </td>
-                            <td style={{ padding: '12px', fontSize: '13px', textAlign: 'right', color: '#64748b' }}>
-                              {(item.safetyStock || item.safety_stock || 0).toLocaleString()}
-                            </td>
-                            <td style={{ padding: '12px', textAlign: 'center' }}>
-                              <span style={{
-                                padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
-                                background: isCritical ? '#fef2f2' : isLow ? '#fffbeb' : '#f0fdf4',
-                                color: isCritical ? '#dc2626' : isLow ? '#d97706' : '#16a34a'
-                              }}>
-                                {isCritical ? '严重不足' : isLow ? '库存不足' : '正常'}
-                              </span>
-                            </td>
-                            <td style={{ padding: '12px', textAlign: 'center' }}>
-                              <Button size="sm" variant="secondary" icon={Edit} onClick={() => openEditInventory(item, 'material')}>编辑</Button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )
-            )}
-
-            {/* 产品库存表格 */}
-            {inventoryTab === 'products' && (
-              inventory.products.length === 0 ? (
-                <EmptyState icon={Package} title="暂无产品库存" description="该仓库还没有产品库存记录" />
-              ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                        <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>产品编码</th>
-                        <th style={{ textAlign: 'left', padding: '12px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>产品名称</th>
-                        <th style={{ textAlign: 'right', padding: '12px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>当前库存</th>
-                        <th style={{ textAlign: 'right', padding: '12px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>安全库存</th>
-                        <th style={{ textAlign: 'center', padding: '12px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>状态</th>
-                        <th style={{ textAlign: 'center', padding: '12px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>操作</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {inventory.products.map(item => {
-                        const isLow = item.quantity < (item.safetyStock || item.safety_stock || 0);
-                        const isCritical = item.quantity < (item.safetyStock || item.safety_stock || 0) * 0.5;
-                        return (
-                          <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                            <td style={{ padding: '12px', fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>{item.productCode || item.product_code}</td>
-                            <td style={{ padding: '12px', fontSize: '13px', color: '#374151' }}>{item.productName || item.product_name}</td>
-                            <td style={{ padding: '12px', fontSize: '14px', fontWeight: 700, textAlign: 'right', color: isCritical ? '#dc2626' : isLow ? '#f59e0b' : '#10b981' }}>
-                              {item.quantity?.toLocaleString()}
-                            </td>
-                            <td style={{ padding: '12px', fontSize: '13px', textAlign: 'right', color: '#64748b' }}>
-                              {(item.safetyStock || item.safety_stock || 0).toLocaleString()}
-                            </td>
-                            <td style={{ padding: '12px', textAlign: 'center' }}>
-                              <span style={{
-                                padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600,
-                                background: isCritical ? '#fef2f2' : isLow ? '#fffbeb' : '#f0fdf4',
-                                color: isCritical ? '#dc2626' : isLow ? '#d97706' : '#16a34a'
-                              }}>
-                                {isCritical ? '严重不足' : isLow ? '库存不足' : '正常'}
-                              </span>
-                            </td>
-                            <td style={{ padding: '12px', textAlign: 'center' }}>
-                              <Button size="sm" variant="secondary" icon={Edit} onClick={() => openEditInventory(item, 'product')}>编辑</Button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )
-            )}
-          </>
-        )}
-
-        {/* 库存编辑子模态框 */}
-        {editingInventory && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001 }}>
-            <div style={{ background: '#fff', borderRadius: '16px', padding: '24px', width: '400px', maxWidth: '90vw' }}>
-              <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: 700 }}>
-                编辑库存 - {editingInventory.materialName || editingInventory.material_name || editingInventory.productName || editingInventory.product_name}
-              </h3>
-              <Input label="当前库存数量" type="number" value={inventoryForm.quantity} onChange={v => setInventoryForm({ ...inventoryForm, quantity: parseInt(v) || 0 })} />
-              <Input label="安全库存" type="number" value={inventoryForm.safetyStock} onChange={v => setInventoryForm({ ...inventoryForm, safetyStock: parseInt(v) || 0 })} />
-              <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'flex-end' }}>
-                <Button variant="secondary" onClick={() => setEditingInventory(null)}>取消</Button>
-                <Button icon={Save} onClick={handleSaveInventory}>保存</Button>
-              </div>
-            </div>
-          </div>
-        )}
-      </Modal>
-    </div>
-  );
-});
+const WarehouseManagementPage = memo(() => (
+  <CrudManagementPage title="仓库管理" subtitle="管理仓库信息" apiEndpoint="/api/warehouses" icon={Warehouse}
+    columns={[
+      { key: 'warehouseCode', title: '仓库编码', render: (v) => <span style={{ fontWeight: 700, color: '#0f172a' }}>{v}</span> },
+      { key: 'name', title: '仓库名称' },
+      { key: 'location', title: '位置' },
+      { key: 'capacity', title: '容量', align: 'center' },
+      { key: 'manager', title: '管理员' },
+    ]}
+    formFields={[
+      { key: 'warehouseCode', label: '仓库编码', required: true },
+      { key: 'name', label: '仓库名称', required: true },
+      { key: 'location', label: '位置' },
+      { key: 'capacity', label: '容量', type: 'number' },
+      { key: 'manager', label: '管理员' },
+    ]}
+  />
+));
 
 // ============ 主应用内容（带URL路由） ============
 const MainApp = () => {
