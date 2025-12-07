@@ -1,0 +1,19 @@
+/* 全局基础样式：让页面占满全屏、去掉默认外边距 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui,
+    "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #020617; /* 深色背景，让白色卡片更明显 */
+}
