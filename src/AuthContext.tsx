@@ -50,7 +50,7 @@ const PERMISSIONS = {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
