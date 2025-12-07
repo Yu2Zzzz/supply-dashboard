@@ -1144,18 +1144,25 @@ const PurchaseOrderManagementPage = memo(() => {
 
   // 修改状态 - 直接用 PUT 更新整个订单
   const handleStatusChange = async (order, newStatus) => {
+    // 格式化日期函数
+    const formatDateForApi = (dateStr) => {
+      if (!dateStr) return null;
+      const d = new Date(dateStr);
+      return d.toISOString().split('T')[0];
+    };
+    
     const res = await request(`/api/purchase-orders/${order.id}`, { 
       method: 'PUT', 
       body: JSON.stringify({ 
-        poNo: order.poNo,  // 必须传递采购单号
+        poNo: order.poNo,
         materialId: order.materialId,
         supplierId: order.supplierId,
         quantity: order.quantity,
-        unitPrice: order.unitPrice,
-        orderDate: order.orderDate,
-        expectedDate: order.expectedDate,
-        actualDate: newStatus === 'arrived' ? new Date().toISOString().split('T')[0] : order.actualDate,  // 到货时自动设置实际到货日期
-        totalAmount: order.totalAmount,
+        unitPrice: order.unitPrice || 0,
+        orderDate: formatDateForApi(order.orderDate),
+        expectedDate: formatDateForApi(order.expectedDate),
+        actualDate: newStatus === 'arrived' ? new Date().toISOString().split('T')[0] : (order.actualDate ? formatDateForApi(order.actualDate) : null),
+        totalAmount: order.totalAmount || (order.quantity * (order.unitPrice || 0)),
         remark: order.remark || '',
         status: newStatus 
       }) 
