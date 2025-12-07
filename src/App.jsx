@@ -143,7 +143,7 @@ const LoginPage = memo(() => {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
 
-  const handleSubmit = async (e) => {
+const handleSubmit = async (e) => {
   e.preventDefault();
   setError('');
   setLoading(true);
@@ -151,16 +151,15 @@ const LoginPage = memo(() => {
   const result = await login(username, password);
 
   if (result.success) {
-    // 登录成功 → 直接刷新页面
-    // 刷新后 AuthProvider 会检测 token，从而进入主系统页面
-    window.location.reload();
+    // 登录成功 → 强制跳回首页，让 AuthProvider 重新加载
+    window.location.href = "/";
     return;
   }
 
-  // 登录失败
   setError(result.message || "登录失败");
   setLoading(false);
 };
+
 
 
   return (
