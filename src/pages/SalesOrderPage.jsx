@@ -1,4 +1,4 @@
-// src/pages/SalesOrderPage.jsx - 完整修复版
+// src/pages/SalesOrderPage.jsx - 完全修复版（修复404和toFixed错误）
 import React, { memo, useState, useCallback, useEffect } from 'react';
 import { Plus, Search, RefreshCw, Edit, Trash2, Save, FileText, ArrowRight, Eye, Package } from 'lucide-react';
 import { useApi } from '../hooks/useApi';
@@ -21,8 +21,8 @@ const SalesOrderPage = memo(({
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [showLinesModal, setShowLinesModal] = useState(false); // 新增：查看产品明细的模态框
-  const [viewingOrderLines, setViewingOrderLines] = useState(null); // 新增：当前查看的订单明细
+  const [showLinesModal, setShowLinesModal] = useState(false);
+  const [viewingOrderLines, setViewingOrderLines] = useState(null);
   const [editingOrder, setEditingOrder] = useState(null);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -30,6 +30,7 @@ const SalesOrderPage = memo(({
     customerId: '', orderDate: '', deliveryDate: '', salesPerson: '', status: 'pending', remark: '', lines: []
   });
 
+  // ✅ 修复：不调用不存在的 /lines API
   const fetchData = useCallback(async () => {
     setLoading(true);
     const [ordersRes, customersRes, productsRes] = await Promise.all([
@@ -38,28 +39,11 @@ const SalesOrderPage = memo(({
       request('/api/products')
     ]);
     
+    // 直接使用订单对象中的lines字段，不额外请求
     if (ordersRes.success) {
       const ordersList = ordersRes.data?.list || ordersRes.data || [];
-      
-      // ✨ 修复：获取每个订单的产品明细
-      const ordersWithLines = await Promise.all(
-        ordersList.map(async (order) => {
-          try {
-            // 尝试获取订单明细
-            const linesRes = await request(`/api/sales-orders/${order.id}/lines`);
-            if (linesRes.success && linesRes.data) {
-              return { ...order, lines: linesRes.data };
-            }
-            // 如果没有专门的lines接口，从order对象中获取
-            return { ...order, lines: order.lines || order.orderLines || [] };
-          } catch (e) {
-            return { ...order, lines: order.lines || order.orderLines || [] };
-          }
-        })
-      );
-      
-      console.log('📦 订单数据（含明细）:', ordersWithLines);
-      setOrders(ordersWithLines);
+      console.log('📦 获取到订单:', ordersList.length, '个');
+      setOrders(ordersList);
     }
     
     if (customersRes.success) setCustomers(customersRes.data?.list || customersRes.data || []);
@@ -79,14 +63,14 @@ const SalesOrderPage = memo(({
       remark: formData.remark || ''
     };
     
-    // ✨ 修复：新建和编辑都发送 lines
+    // 新建和编辑都发送 lines
     if (formData.lines.length > 0) {
       submitData.lines = formData.lines.map(line => ({
         productId: parseInt(line.productId),
-        product_id: parseInt(line.productId), // 兼容下划线命名
+        product_id: parseInt(line.productId),
         quantity: parseInt(line.quantity) || 1,
         unitPrice: parseFloat(line.unitPrice) || 0,
-        unit_price: parseFloat(line.unitPrice) || 0 // 兼容下划线命名
+        unit_price: parseFloat(line.unitPrice) || 0
       }));
     }
 
@@ -102,8 +86,7 @@ const SalesOrderPage = memo(({
     if (res.success) { 
       setShowModal(false); 
       alert('保存成功！');
-      // 重新获取数据，包括产品明细
-      await fetchData();
+      await fetchData(); // 重新获取数据
     } else {
       console.error('❌ 保存失败:', res);
       alert(res.message || '操作失败');
@@ -146,7 +129,9 @@ const SalesOrderPage = memo(({
   const openModal = (order = null) => {
     setEditingOrder(order);
     if (order) {
-      console.log('📝 编辑订单，当前明细:', order.lines);
+      console.log('📝 编辑订单:', order);
+      console.log('   订单明细:', order.lines || order.orderLines || '无');
+      
       setFormData({
         customerId: order.customerId || order.customer_id || '', 
         orderDate: formatDateInput(order.orderDate || order.order_date), 
@@ -154,7 +139,7 @@ const SalesOrderPage = memo(({
         salesPerson: order.salesPerson || order.sales_person || '', 
         status: order.status || 'pending', 
         remark: order.remark || '', 
-        lines: order.lines || order.orderLines || []  // 支持多种字段名
+        lines: order.lines || order.orderLines || []
       });
     } else {
       setFormData({ 
@@ -170,24 +155,13 @@ const SalesOrderPage = memo(({
     setShowModal(true);
   };
 
-  // ✨ 新增：查看订单产品明细
-  const viewOrderLines = async (order) => {
+  // ✅ 修复：查看订单产品明细
+  const viewOrderLines = (order) => {
     console.log('👀 查看订单明细:', order.orderNo);
+    console.log('   明细数据:', order.lines || order.orderLines);
     
-    // 尝试从多个来源获取明细
-    let lines = order.lines || order.orderLines || [];
-    
-    // 如果没有明细，尝试从API获取
-    if (lines.length === 0) {
-      try {
-        const linesRes = await request(`/api/sales-orders/${order.id}/lines`);
-        if (linesRes.success && linesRes.data) {
-          lines = linesRes.data;
-        }
-      } catch (e) {
-        console.log('⚠️ 无法获取订单明细');
-      }
-    }
+    // 从订单对象中获取明细（不调用API）
+    const lines = order.lines || order.orderLines || [];
     
     setViewingOrderLines({ ...order, lines });
     setShowLinesModal(true);
@@ -198,7 +172,6 @@ const SalesOrderPage = memo(({
       ...formData, 
       lines: [...formData.lines, { productId: '', quantity: 1, unitPrice: 0 }] 
     });
-    console.log('✅ 添加产品行，当前共', formData.lines.length + 1, '个');
   };
 
   const updateLine = (idx, field, value) => {
@@ -227,12 +200,18 @@ const SalesOrderPage = memo(({
     label: c.name || c.customerName
   }));
 
-  // 根据productId获取产品名称
+  // ✅ 修复：安全地获取产品名称
   const getProductName = (productId) => {
     const product = products.find(p => 
       p.id == productId || p.productId == productId || p.productCode == productId
     );
     return product ? (product.name || product.productName) : `产品ID: ${productId}`;
+  };
+
+  // ✅ 修复：安全地转换为数字
+  const toNumber = (value) => {
+    const num = parseFloat(value);
+    return isNaN(num) ? 0 : num;
   };
 
   if (loading) return <LoadingScreen />;
@@ -300,14 +279,14 @@ const SalesOrderPage = memo(({
                       <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{formatDate(order.deliveryDate)}</td>
                       <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{order.salesPerson || '-'}</td>
                       
-                      {/* ✨ 新增：产品明细列 */}
+                      {/* 产品明细列 */}
                       <td style={{ padding: '16px', textAlign: 'center' }}>
                         {linesCount > 0 ? (
                           <Button size="sm" variant="secondary" icon={Package} onClick={() => viewOrderLines(order)}>
                             查看 ({linesCount})
                           </Button>
                         ) : (
-                          <span style={{ fontSize: '12px', color: '#94a3b8' }}>暂无产品</span>
+                          <span style={{ fontSize: '12px', color: '#94a3b8' }}>暂无</span>
                         )}
                       </td>
                       
@@ -334,11 +313,11 @@ const SalesOrderPage = memo(({
         )}
       </Card>
 
-      {/* ✨ 新增：查看产品明细的模态框 */}
+      {/* ✅ 修复：查看产品明细模态框 - 修复 toFixed 错误 */}
       <Modal 
         isOpen={showLinesModal} 
         onClose={() => setShowLinesModal(false)} 
-        title={`订单产品明细 - ${viewingOrderLines?.orderNo}`}
+        title={`订单产品明细 - ${viewingOrderLines?.orderNo || ''}`}
         width="600px"
       >
         {viewingOrderLines && (
@@ -368,37 +347,44 @@ const SalesOrderPage = memo(({
               <EmptyState icon={Package} title="暂无产品明细" description="此订单还没有添加产品" />
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {(viewingOrderLines.lines || []).map((line, idx) => (
-                  <div key={idx} style={{ 
-                    padding: '16px', 
-                    background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', 
-                    borderRadius: '12px',
-                    border: '1px solid #e2e8f0'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
-                        {getProductName(line.productId || line.product_id)}
+                {(viewingOrderLines.lines || []).map((line, idx) => {
+                  // ✅ 修复：安全地转换为数字
+                  const quantity = toNumber(line.quantity);
+                  const unitPrice = toNumber(line.unitPrice || line.unit_price);
+                  const subtotal = quantity * unitPrice;
+                  
+                  return (
+                    <div key={idx} style={{ 
+                      padding: '16px', 
+                      background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', 
+                      borderRadius: '12px',
+                      border: '1px solid #e2e8f0'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                        <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
+                          {getProductName(line.productId || line.product_id)}
+                        </div>
+                        <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', background: '#fff', padding: '4px 8px', borderRadius: '6px' }}>
+                          #{idx + 1}
+                        </div>
                       </div>
-                      <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', background: '#fff', padding: '4px 8px', borderRadius: '6px' }}>
-                        #{idx + 1}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', fontSize: '13px' }}>
+                        <div>
+                          <span style={{ color: '#64748b', fontWeight: 600 }}>数量：</span>
+                          <span style={{ color: '#0f172a', fontWeight: 700 }}>{quantity}</span>
+                        </div>
+                        <div>
+                          <span style={{ color: '#64748b', fontWeight: 600 }}>单价：</span>
+                          <span style={{ color: '#10b981', fontWeight: 700 }}>¥{unitPrice.toFixed(2)}</span>
+                        </div>
+                        <div>
+                          <span style={{ color: '#64748b', fontWeight: 600 }}>小计：</span>
+                          <span style={{ color: '#3b82f6', fontWeight: 700 }}>¥{subtotal.toFixed(2)}</span>
+                        </div>
                       </div>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', fontSize: '13px' }}>
-                      <div>
-                        <span style={{ color: '#64748b', fontWeight: 600 }}>数量：</span>
-                        <span style={{ color: '#0f172a', fontWeight: 700 }}>{line.quantity}</span>
-                      </div>
-                      <div>
-                        <span style={{ color: '#64748b', fontWeight: 600 }}>单价：</span>
-                        <span style={{ color: '#10b981', fontWeight: 700 }}>¥{(line.unitPrice || line.unit_price || 0).toFixed(2)}</span>
-                      </div>
-                      <div>
-                        <span style={{ color: '#64748b', fontWeight: 600 }}>小计：</span>
-                        <span style={{ color: '#3b82f6', fontWeight: 700 }}>¥{(line.quantity * (line.unitPrice || line.unit_price || 0)).toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
                 
                 {/* 总计 */}
                 <div style={{ 
@@ -410,9 +396,11 @@ const SalesOrderPage = memo(({
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '15px', fontWeight: 700, color: '#064e3b' }}>订单总额</span>
                     <span style={{ fontSize: '24px', fontWeight: 800, color: '#10b981' }}>
-                      ¥{(viewingOrderLines.lines || []).reduce((sum, line) => 
-                        sum + (line.quantity * (line.unitPrice || line.unit_price || 0)), 0
-                      ).toFixed(2)}
+                      ¥{(viewingOrderLines.lines || []).reduce((sum, line) => {
+                        const qty = toNumber(line.quantity);
+                        const price = toNumber(line.unitPrice || line.unit_price);
+                        return sum + (qty * price);
+                      }, 0).toFixed(2)}
                     </span>
                   </div>
                 </div>
@@ -488,7 +476,7 @@ const SalesOrderPage = memo(({
                       label="数量" 
                       type="number" 
                       value={line.quantity} 
-                      onChange={v => updateLine(idx, 'quantity', parseInt(v) || 0)} 
+                      onChange={v => updateLine(idx, 'quantity', parseInt(v) || 1)} 
                       required 
                     />
                   </div>
@@ -512,7 +500,11 @@ const SalesOrderPage = memo(({
             <div style={{ marginTop: '12px', padding: '12px 16px', background: '#f0fdf4', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '13px', color: '#064e3b', fontWeight: 600 }}>订单总额</span>
               <span style={{ fontSize: '20px', fontWeight: 700, color: '#10b981' }}>
-                ¥{formData.lines.reduce((sum, line) => sum + (line.quantity * (line.unitPrice || 0)), 0).toFixed(2)}
+                ¥{formData.lines.reduce((sum, line) => {
+                  const qty = toNumber(line.quantity);
+                  const price = toNumber(line.unitPrice);
+                  return sum + (qty * price);
+                }, 0).toFixed(2)}
               </span>
             </div>
           )}
@@ -520,8 +512,8 @@ const SalesOrderPage = memo(({
 
         <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'flex-end' }}>
           <Button variant="secondary" onClick={() => setShowModal(false)}>取消</Button>
-          <Button icon={Save} onClick={handleSubmit} disabled={formData.lines.length === 0}>
-            保存 {formData.lines.length > 0 && `(${formData.lines.length} 个产品)`}
+          <Button icon={Save} onClick={handleSubmit}>
+            保存
           </Button>
         </div>
       </Modal>
