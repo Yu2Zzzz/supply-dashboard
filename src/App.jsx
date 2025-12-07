@@ -86,10 +86,11 @@ const LoginPage = memo(() => {
             alignItems: 'center', 
             justifyContent: 'center',
             boxShadow: '0 10px 25px rgba(59, 130, 246, 0.3)',
+            overflow: 'hidden'
           }}>
-            <Factory size={36} style={{ color: '#fff' }} />
+            <img src="/logo.png" alt="Logo" style={{ width: '50px', height: '50px', objectFit: 'contain' }} />
           </div>
-          <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', margin: 0 }}>供应链管理系统</h1>
+          <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', margin: 0 }}>百汇供应链管理系统</h1>
           <p style={{ fontSize: '15px', color: '#64748b', marginTop: '8px', fontWeight: 500 }}>请登录您的账号</p>
         </div>
 
@@ -428,8 +429,8 @@ const EmptyState = memo(({ icon: Icon, title, description }) => (
 const LoadingScreen = memo(() => (
   <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
     <div style={{ textAlign: 'center' }}>
-      <div style={{ width: '80px', height: '80px', margin: '0 auto 32px', background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse 2s infinite' }}>
-        <Factory size={40} style={{ color: '#fff' }} />
+      <div style={{ width: '80px', height: '80px', margin: '0 auto 32px', background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse 2s infinite', overflow: 'hidden' }}>
+        <img src="/logo.png" alt="Logo" style={{ width: '55px', height: '55px', objectFit: 'contain' }} />
       </div>
       <div style={{ fontSize: '20px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>加载中</div>
       <div style={{ fontSize: '14px', color: '#64748b', fontWeight: 500 }}>正在获取数据...</div>
@@ -494,13 +495,13 @@ const Sidebar = memo(({ currentPage, onNavigate, collapsed, onToggle }) => {
       boxShadow: '4px 0 24px rgba(0,0,0,0.12)'
     }}>
       <div style={{ padding: '24px', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{ width: '44px', height: '44px', background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <Factory size={22} style={{ color: '#fff' }} />
+        <div style={{ width: '44px', height: '44px', background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+          <img src="/logo.png" alt="Logo" style={{ width: '30px', height: '30px', objectFit: 'contain' }} />
         </div>
         {!collapsed && (
           <div>
-            <div style={{ fontSize: '17px', fontWeight: 700, color: '#fff' }}>供应链管理</div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>CONTROL CENTER</div>
+            <div style={{ fontSize: '17px', fontWeight: 700, color: '#fff' }}>百汇供应链</div>
+            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>BAIHUI SCM</div>
           </div>
         )}
       </div>
@@ -574,7 +575,7 @@ const DashboardPage = memo(({ data, onNav }) => {
     <div>
       <div style={{ marginBottom: '32px' }}>
         <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0' }}>仪表板</h1>
-        <p style={{ fontSize: '15px', color: '#64748b', margin: 0 }}>供应链风险监控概览</p>
+        <p style={{ fontSize: '15px', color: '#64748b', margin: 0 }}>百汇供应链风险监控概览</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '32px' }}>
