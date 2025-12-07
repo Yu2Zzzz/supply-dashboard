@@ -1,7 +1,9 @@
 // src/config/constants.js
 import { CheckCircle, AlertTriangle, AlertOctagon, XCircle, Clock } from 'lucide-react';
 
-export const BASE_URL = 'http://localhost:4000';
+export const BASE_URL =
+  import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
 
 export const RISK = {
   ongoing: { color: '#10b981', bgColor: '#d1fae5', text: '正常', icon: CheckCircle, priority: 1 },
