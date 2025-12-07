@@ -1095,7 +1095,7 @@ const PurchaseOrderManagementPage = memo(() => {
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [formData, setFormData] = useState({
-    materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: '', expectedDate: '', remark: ''
+    materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: '', expectedDate: '', status: 'draft', remark: ''
   });
 
   const fetchData = useCallback(async () => {
@@ -1128,8 +1128,22 @@ const PurchaseOrderManagementPage = memo(() => {
     else alert(res.message || '删除失败');
   };
 
-  const handleStatusChange = async (id, newStatus) => {
-    const res = await request(`/api/purchase-orders/${id}/confirm`, { method: 'POST', body: JSON.stringify({ status: newStatus }) });
+  // 修改状态 - 直接用 PUT 更新整个订单
+  const handleStatusChange = async (order, newStatus) => {
+    const res = await request(`/api/purchase-orders/${order.id}`, { 
+      method: 'PUT', 
+      body: JSON.stringify({ 
+        materialId: order.materialId,
+        supplierId: order.supplierId,
+        quantity: order.quantity,
+        unitPrice: order.unitPrice,
+        orderDate: order.orderDate,
+        expectedDate: order.expectedDate,
+        totalAmount: order.totalAmount,
+        remark: order.remark || '',
+        status: newStatus 
+      }) 
+    });
     if (res.success) fetchData();
     else alert(res.message || '状态更新失败');
   };
@@ -1139,10 +1153,11 @@ const PurchaseOrderManagementPage = memo(() => {
     if (order) {
       setFormData({
         materialId: order.materialId, supplierId: order.supplierId, quantity: order.quantity, unitPrice: order.unitPrice || 0,
-        orderDate: formatDateInput(order.orderDate), expectedDate: formatDateInput(order.expectedDate), remark: order.remark || ''
+        orderDate: formatDateInput(order.orderDate), expectedDate: formatDateInput(order.expectedDate), 
+        status: order.status || 'draft', remark: order.remark || ''
       });
     } else {
-      setFormData({ materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: new Date().toISOString().split('T')[0], expectedDate: '', remark: '' });
+      setFormData({ materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: new Date().toISOString().split('T')[0], expectedDate: '', status: 'draft', remark: '' });
     }
     setShowModal(true);
   };
@@ -1214,8 +1229,9 @@ const PurchaseOrderManagementPage = memo(() => {
                       <td style={{ padding: '16px', textAlign: 'center' }}><StatusTag status={order.status} statusMap={PO_STATUS} /></td>
                       <td style={{ padding: '16px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                          {/* 状态流转按钮 - 显示下一个状态 */}
                           {statusInfo?.next && (
-                            <Button size="sm" variant="success" icon={ArrowRight} onClick={() => handleStatusChange(order.id, statusInfo.next)}>
+                            <Button size="sm" variant="success" icon={ArrowRight} onClick={() => handleStatusChange(order, statusInfo.next)}>
                               {PO_STATUS[statusInfo.next]?.text}
                             </Button>
                           )}
@@ -1245,10 +1261,36 @@ const PurchaseOrderManagementPage = memo(() => {
           <Input label="下单日期" type="date" value={formData.orderDate} onChange={v => setFormData({ ...formData, orderDate: v })} required />
           <Input label="预计到货日期" type="date" value={formData.expectedDate} onChange={v => setFormData({ ...formData, expectedDate: v })} required />
         </div>
+        
+        {/* 状态选择 - 编辑时可以修改状态 */}
+        <Select 
+          label="订单状态" 
+          value={formData.status} 
+          onChange={v => setFormData({ ...formData, status: v })} 
+          options={Object.entries(PO_STATUS).map(([key, val]) => ({ value: key, label: val.text }))} 
+        />
+        
         <div style={{ padding: '12px 16px', background: '#f0fdf4', borderRadius: '8px', marginBottom: '16px' }}>
           <div style={{ fontSize: '12px', color: '#64748b' }}>订单金额</div>
           <div style={{ fontSize: '20px', fontWeight: 700, color: '#10b981' }}>¥{(formData.quantity * formData.unitPrice).toLocaleString()}</div>
         </div>
+        
+        {/* 状态流转说明 */}
+        <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', marginBottom: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>状态流转说明</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#374151', flexWrap: 'wrap' }}>
+            <span style={{ padding: '4px 8px', background: PO_STATUS.draft.bgColor, color: PO_STATUS.draft.color, borderRadius: '4px' }}>草稿</span>
+            <span>→</span>
+            <span style={{ padding: '4px 8px', background: PO_STATUS.confirmed.bgColor, color: PO_STATUS.confirmed.color, borderRadius: '4px' }}>已确认</span>
+            <span>→</span>
+            <span style={{ padding: '4px 8px', background: PO_STATUS.producing.bgColor, color: PO_STATUS.producing.color, borderRadius: '4px' }}>生产中</span>
+            <span>→</span>
+            <span style={{ padding: '4px 8px', background: PO_STATUS.shipped.bgColor, color: PO_STATUS.shipped.color, borderRadius: '4px' }}>已发货</span>
+            <span>→</span>
+            <span style={{ padding: '4px 8px', background: PO_STATUS.arrived.bgColor, color: PO_STATUS.arrived.color, borderRadius: '4px' }}>已到货</span>
+          </div>
+        </div>
+        
         <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'flex-end' }}>
           <Button variant="secondary" onClick={() => setShowModal(false)}>取消</Button>
           <Button icon={Save} onClick={handleSubmit}>保存</Button>
