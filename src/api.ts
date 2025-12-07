@@ -1,6 +1,6 @@
 // frontend/src/services/api.ts
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE || 'http://localhost:4000';
+const BASE_URL = "https://supply-backend-g3gm.onrender.com";
 
 // 通用请求函数
 async function request<T>(

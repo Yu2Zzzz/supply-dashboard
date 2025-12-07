@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect, createContext, useCon
 import { AlertCircle, Package, TrendingUp, TrendingDown, ChevronLeft, CheckCircle, AlertTriangle, XCircle, Clock, Factory, Users, Calendar, Box, Truck, AlertOctagon, Filter, ChevronRight, Layers, ShoppingCart, LogOut, User, Menu, X, Home, FileText, Settings, Warehouse, Building, UserPlus, Edit, Trash2, Plus, Save, Search, RefreshCw, Zap, Eye, Play, Send, Check, ArrowRight } from 'lucide-react';
 
 // ============ API 配置 ============
-const BASE_URL = import.meta.env.VITE_API_BASE || "http://localhost:4000";
+const BASE_URL = "https://supply-backend-g3gm.onrender.com";
 
 // ============ 工具函数 ============
 const debounce = (func, delay) => {
