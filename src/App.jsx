@@ -1502,6 +1502,10 @@ const ProductManagementPage = memo(() => (
       { key: 'name', label: '产品名称', required: true },
       { key: 'category', label: '类别' },
       { key: 'unit', label: '单位', defaultValue: 'PCS' },
+      { key: 'status', label: '状态', type: 'select', defaultValue: 'active', options: [
+        { value: 'active', label: '启用' },
+        { value: 'inactive', label: '停用' }
+      ]},
     ]}
   />
 ));
