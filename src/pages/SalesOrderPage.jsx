@@ -1,21 +1,99 @@
-// src/pages/SalesOrderPage.jsx - 完全修复版（修复404和toFixed错误）
+// src/pages/SalesOrderPage.jsx - 完整独立版（内置UI组件，管理员才能编辑状态）
 import React, { memo, useState, useCallback, useEffect } from 'react';
-import { Plus, Search, RefreshCw, Edit, Trash2, Save, FileText, ArrowRight, Eye, Package } from 'lucide-react';
+import { Plus, Search, RefreshCw, Edit, Trash2, Save, FileText, ArrowRight, Package, X } from 'lucide-react';
 import { useApi } from '../hooks/useApi';
+import { useAuth } from '../contexts/AuthContext';
 import { SO_STATUS } from '../config/constants';
 import { formatDate, formatDateInput } from '../utils/helpers';
 
-const SalesOrderPage = memo(({
-  Button,
-  Input,
-  Select,
-  Modal,
-  Card,
-  EmptyState,
-  LoadingScreen,
-  StatusTag
-}) => {
+// ============ 内置 UI 组件 ============
+const Card = memo(({ children, style = {} }) => (
+  <div style={{ background: '#fff', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', ...style }}>
+    {children}
+  </div>
+));
+
+const Button = memo(({ children, onClick, variant = 'primary', icon: Icon, size = 'md', disabled = false, style = {} }) => {
+  const baseStyle = {
+    display: 'inline-flex', alignItems: 'center', gap: '8px', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
+    fontWeight: 600, borderRadius: size === 'sm' ? '8px' : '12px', transition: 'all 0.2s',
+    padding: size === 'sm' ? '8px 12px' : '12px 20px', fontSize: size === 'sm' ? '12px' : '14px',
+    opacity: disabled ? 0.5 : 1, ...style
+  };
+  const variants = {
+    primary: { background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: '#fff' },
+    secondary: { background: '#f1f5f9', color: '#374151' },
+    danger: { background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', color: '#fff' },
+    success: { background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff' }
+  };
+  return <button style={{ ...baseStyle, ...variants[variant] }} onClick={onClick} disabled={disabled}>{Icon && <Icon size={size === 'sm' ? 14 : 18} />}{children}</button>;
+});
+
+const Input = memo(({ label, value, onChange, placeholder, type = 'text', required = false, disabled = false, step }) => (
+  <div style={{ marginBottom: '16px' }}>
+    {label && <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>{label}{required && <span style={{ color: '#ef4444' }}> *</span>}</label>}
+    <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled} step={step}
+      style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', boxSizing: 'border-box', background: disabled ? '#f8fafc' : '#fff' }} />
+  </div>
+));
+
+const Select = memo(({ label, value, onChange, options, required = false, disabled = false }) => (
+  <div style={{ marginBottom: '16px' }}>
+    {label && <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>{label}{required && <span style={{ color: '#ef4444' }}> *</span>}</label>}
+    <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled}
+      style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', background: disabled ? '#f8fafc' : '#fff', cursor: 'pointer' }}>
+      <option value="">请选择</option>
+      {options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+    </select>
+  </div>
+));
+
+const Modal = memo(({ isOpen, onClose, title, children, width = '500px' }) => {
+  if (!isOpen) return null;
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '24px' }}>
+      <div style={{ background: '#fff', borderRadius: '20px', width: '100%', maxWidth: width, maxHeight: '90vh', overflow: 'auto', position: 'relative' }}>
+        <div style={{ padding: '24px 24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+          <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#0f172a' }}>{title}</h2>
+          <button onClick={onClose} style={{ background: '#f1f5f9', border: 'none', borderRadius: '10px', width: '36px', height: '36px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={18} /></button>
+        </div>
+        <div style={{ padding: '0 24px 24px' }}>{children}</div>
+      </div>
+    </div>
+  );
+});
+
+const EmptyState = memo(({ icon: Icon, title, description }) => (
+  <div style={{ textAlign: 'center', padding: '48px 24px' }}>
+    <div style={{ width: '64px', height: '64px', margin: '0 auto 16px', background: '#f1f5f9', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Icon size={28} style={{ color: '#94a3b8' }} />
+    </div>
+    <div style={{ fontSize: '16px', fontWeight: 600, color: '#374151', marginBottom: '4px' }}>{title}</div>
+    <div style={{ fontSize: '14px', color: '#94a3b8' }}>{description}</div>
+  </div>
+));
+
+const LoadingScreen = memo(() => (
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px' }}>
+    <div style={{ textAlign: 'center' }}>
+      <div style={{ width: '48px', height: '48px', margin: '0 auto 16px', border: '4px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+      <div style={{ color: '#64748b' }}>加载中...</div>
+    </div>
+    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+  </div>
+));
+
+const StatusTag = memo(({ status, statusMap }) => {
+  const info = statusMap[status] || { text: status, color: '#64748b', bgColor: '#f1f5f9' };
+  return <span style={{ padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, color: info.color, background: info.bgColor }}>{info.text}</span>;
+});
+
+// ============ 业务订单页面 ============
+const SalesOrderPage = memo(() => {
   const { request } = useApi();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+  
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -30,7 +108,6 @@ const SalesOrderPage = memo(({
     customerId: '', orderDate: '', deliveryDate: '', salesPerson: '', status: 'pending', remark: '', lines: []
   });
 
-  // ✅ 修复：不调用不存在的 /lines API
   const fetchData = useCallback(async () => {
     setLoading(true);
     const [ordersRes, customersRes, productsRes] = await Promise.all([
@@ -39,7 +116,6 @@ const SalesOrderPage = memo(({
       request('/api/products')
     ]);
     
-    // 直接使用订单对象中的lines字段，不额外请求
     if (ordersRes.success) {
       const ordersList = ordersRes.data?.list || ordersRes.data || [];
       console.log('📦 获取到订单:', ordersList.length, '个');
@@ -53,17 +129,23 @@ const SalesOrderPage = memo(({
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // 格式化日期为 YYYY-MM-DD
+  const formatDateForApi = (dateStr) => {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    return d.toISOString().split('T')[0];
+  };
+
   const handleSubmit = async () => {
     const submitData = {
       customerId: parseInt(formData.customerId) || formData.customerId,
-      orderDate: formData.orderDate,
-      deliveryDate: formData.deliveryDate,
+      orderDate: formatDateForApi(formData.orderDate),
+      deliveryDate: formatDateForApi(formData.deliveryDate),
       salesPerson: formData.salesPerson || '',
       status: formData.status || 'pending',
       remark: formData.remark || ''
     };
     
-    // 新建和编辑都发送 lines
     if (formData.lines.length > 0) {
       submitData.lines = formData.lines.map(line => ({
         productId: parseInt(line.productId),
@@ -81,12 +163,10 @@ const SalesOrderPage = memo(({
     
     const res = await request(endpoint, { method, body: JSON.stringify(submitData) });
     
-    console.log('📥 服务器响应:', res);
-    
     if (res.success) { 
       setShowModal(false); 
       alert('保存成功！');
-      await fetchData(); // 重新获取数据
+      await fetchData();
     } else {
       console.error('❌ 保存失败:', res);
       alert(res.message || '操作失败');
@@ -107,12 +187,14 @@ const SalesOrderPage = memo(({
   const handleStatusChange = async (order, newStatus) => {
     const updateData = {
       customerId: parseInt(order.customerId || order.customer_id),
-      orderDate: order.orderDate || order.order_date,
-      deliveryDate: order.deliveryDate || order.delivery_date,
+      orderDate: formatDateForApi(order.orderDate || order.order_date),
+      deliveryDate: formatDateForApi(order.deliveryDate || order.delivery_date),
       salesPerson: order.salesPerson || order.sales_person || '',
       status: newStatus,
       remark: order.remark || ''
     };
+    
+    console.log('状态更新数据:', updateData);
     
     const res = await request(`/api/sales-orders/${order.id}`, {
       method: 'PUT',
@@ -122,6 +204,7 @@ const SalesOrderPage = memo(({
       fetchData();
       alert('状态更新成功！');
     } else {
+      console.error('状态更新失败:', res);
       alert(res.message || '状态更新失败');
     }
   };
@@ -130,8 +213,6 @@ const SalesOrderPage = memo(({
     setEditingOrder(order);
     if (order) {
       console.log('📝 编辑订单:', order);
-      console.log('   订单明细:', order.lines || order.orderLines || '无');
-      
       setFormData({
         customerId: order.customerId || order.customer_id || '', 
         orderDate: formatDateInput(order.orderDate || order.order_date), 
@@ -155,14 +236,9 @@ const SalesOrderPage = memo(({
     setShowModal(true);
   };
 
-  // ✅ 修复：查看订单产品明细
   const viewOrderLines = (order) => {
     console.log('👀 查看订单明细:', order.orderNo);
-    console.log('   明细数据:', order.lines || order.orderLines);
-    
-    // 从订单对象中获取明细（不调用API）
     const lines = order.lines || order.orderLines || [];
-    
     setViewingOrderLines({ ...order, lines });
     setShowLinesModal(true);
   };
@@ -200,7 +276,6 @@ const SalesOrderPage = memo(({
     label: c.name || c.customerName
   }));
 
-  // ✅ 修复：安全地获取产品名称
   const getProductName = (productId) => {
     const product = products.find(p => 
       p.id == productId || p.productId == productId || p.productCode == productId
@@ -208,7 +283,6 @@ const SalesOrderPage = memo(({
     return product ? (product.name || product.productName) : `产品ID: ${productId}`;
   };
 
-  // ✅ 修复：安全地转换为数字
   const toNumber = (value) => {
     const num = parseFloat(value);
     return isNaN(num) ? 0 : num;
@@ -234,7 +308,7 @@ const SalesOrderPage = memo(({
               style={{ width: '100%', padding: '12px 14px 12px 42px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', boxSizing: 'border-box' }} />
           </div>
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            {['all', 'pending', 'confirmed', 'producing', 'shipped', 'completed'].map(status => (
+            {['all', 'pending', 'confirmed', 'processing', 'shipped', 'completed'].map(status => (
               <button key={status} onClick={() => setStatusFilter(status)} style={{
                 padding: '10px 16px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px',
                 background: statusFilter === status ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : '#f1f5f9',
@@ -256,14 +330,14 @@ const SalesOrderPage = memo(({
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                  <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>订单号</th>
-                  <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>客户</th>
-                  <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>下单日期</th>
-                  <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>交付日期</th>
-                  <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>业务员</th>
-                  <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>产品</th>
-                  <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>状态</th>
-                  <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>操作</th>
+                  <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>订单号</th>
+                  <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>客户</th>
+                  <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>下单日期</th>
+                  <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>交付日期</th>
+                  <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>业务员</th>
+                  <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>产品</th>
+                  <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>状态</th>
+                  <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -279,7 +353,6 @@ const SalesOrderPage = memo(({
                       <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{formatDate(order.deliveryDate)}</td>
                       <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{order.salesPerson || '-'}</td>
                       
-                      {/* 产品明细列 */}
                       <td style={{ padding: '16px', textAlign: 'center' }}>
                         {linesCount > 0 ? (
                           <Button size="sm" variant="secondary" icon={Package} onClick={() => viewOrderLines(order)}>
@@ -293,6 +366,7 @@ const SalesOrderPage = memo(({
                       <td style={{ padding: '16px', textAlign: 'center' }}><StatusTag status={order.status} statusMap={SO_STATUS} /></td>
                       <td style={{ padding: '16px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                          {/* 状态按钮：所有人都能用 */}
                           {statusInfo.next && (
                             <Button size="sm" variant="success" icon={ArrowRight} onClick={() => handleStatusChange(order, statusInfo.next)}>
                               {(SO_STATUS[statusInfo.next]?.text) || statusInfo.next}
@@ -313,7 +387,7 @@ const SalesOrderPage = memo(({
         )}
       </Card>
 
-      {/* ✅ 修复：查看产品明细模态框 - 修复 toFixed 错误 */}
+      {/* 查看产品明细模态框 */}
       <Modal 
         isOpen={showLinesModal} 
         onClose={() => setShowLinesModal(false)} 
@@ -348,7 +422,6 @@ const SalesOrderPage = memo(({
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {(viewingOrderLines.lines || []).map((line, idx) => {
-                  // ✅ 修复：安全地转换为数字
                   const quantity = toNumber(line.quantity);
                   const unitPrice = toNumber(line.unitPrice || line.unit_price);
                   const subtotal = quantity * unitPrice;
@@ -429,7 +502,16 @@ const SalesOrderPage = memo(({
           <Input label="下单日期" type="date" value={formData.orderDate} onChange={v => setFormData({ ...formData, orderDate: v })} required />
           <Input label="交付日期" type="date" value={formData.deliveryDate} onChange={v => setFormData({ ...formData, deliveryDate: v })} required />
         </div>
-        <Select label="状态" value={formData.status} onChange={v => setFormData({ ...formData, status: v })} options={Object.entries(SO_STATUS).map(([k, v]) => ({ value: k, label: v.text }))} />
+        
+        {/* 状态选择：仅管理员可见 */}
+        {isAdmin && editingOrder && (
+          <Select 
+            label="状态（仅管理员可修改）" 
+            value={formData.status} 
+            onChange={v => setFormData({ ...formData, status: v })} 
+            options={Object.entries(SO_STATUS).map(([k, v]) => ({ value: k, label: v.text }))} 
+          />
+        )}
         
         <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', marginTop: '16px' }}>
           <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>状态流转说明</div>
@@ -444,6 +526,7 @@ const SalesOrderPage = memo(({
             <span>→</span>
             <span style={{ padding: '4px 8px', background: '#d1fae5', color: '#10b981', borderRadius: '4px' }}>已完成</span>
           </div>
+          {!isAdmin && <div style={{ marginTop: '8px', fontSize: '11px', color: '#94a3b8' }}>* 业务员请使用列表中的状态按钮推进订单状态</div>}
         </div>
         
         <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid #e2e8f0' }}>
@@ -495,7 +578,6 @@ const SalesOrderPage = memo(({
             </div>
           )}
           
-          {/* 订单总额 */}
           {formData.lines.length > 0 && (
             <div style={{ marginTop: '12px', padding: '12px 16px', background: '#f0fdf4', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '13px', color: '#064e3b', fontWeight: 600 }}>订单总额</span>
@@ -512,9 +594,7 @@ const SalesOrderPage = memo(({
 
         <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'flex-end' }}>
           <Button variant="secondary" onClick={() => setShowModal(false)}>取消</Button>
-          <Button icon={Save} onClick={handleSubmit}>
-            保存
-          </Button>
+          <Button icon={Save} onClick={handleSubmit}>保存</Button>
         </div>
       </Modal>
     </div>

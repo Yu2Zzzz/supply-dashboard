@@ -11,6 +11,7 @@ import LoginPage from './pages/LoginPage';
 import SalesOrderPage from './pages/SalesOrderPage';
 import PurchaseOrderPage from './pages/PurchaseOrderPage';
 import UserManagementPage from './pages/UserManagementPage';
+import WarehouseManagementPage from './pages/WarehouseManagementPage';
 // ============ API 配置 ============
 
 
@@ -879,24 +880,7 @@ const SupplierManagementPage = memo(() => (
   />
 ));
 
-const WarehouseManagementPage = memo(() => (
-  <CrudManagementPage title="仓库管理" subtitle="管理仓库信息" apiEndpoint="/api/warehouses" icon={Warehouse}
-    columns={[
-      { key: 'warehouseCode', title: '仓库编码', render: (v) => <span style={{ fontWeight: 700, color: '#0f172a' }}>{v}</span> },
-      { key: 'name', title: '仓库名称' },
-      { key: 'location', title: '位置' },
-      { key: 'capacity', title: '容量', align: 'center' },
-      { key: 'manager', title: '管理员' },
-    ]}
-    formFields={[
-      { key: 'warehouseCode', label: '仓库编码', required: true },
-      { key: 'name', label: '仓库名称', required: true },
-      { key: 'location', label: '位置' },
-      { key: 'capacity', label: '容量', type: 'number' },
-      { key: 'manager', label: '管理员' },
-    ]}
-  />
-));
+// WarehouseManagementPage 已移至 ./pages/WarehouseManagementPage.jsx
 
 // ============ 主应用内容（带URL路由） ============
 const MainApp = () => {

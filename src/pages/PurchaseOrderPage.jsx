@@ -2,6 +2,7 @@
 import React, { memo, useState, useCallback, useEffect } from 'react';
 import { Plus, Search, RefreshCw, Edit, Trash2, Save, ShoppingCart, ArrowRight, X } from 'lucide-react';
 import { useApi } from '../hooks/useApi';
+import { useAuth } from '../contexts/AuthContext';
 import { PO_STATUS } from '../config/constants';
 import { formatDate, formatDateInput } from '../utils/helpers';
 
@@ -90,6 +91,8 @@ const StatusTag = memo(({ status, statusMap }) => {
 // ============ 采购订单页面 ============
 const PurchaseOrderPage = memo(() => {
   const { request } = useApi();
+  const { user } = useAuth(); // 获取当前用户
+  const isAdmin = user?.role === 'admin'; // 判断是否管理员
   const [orders, setOrders] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -99,7 +102,7 @@ const PurchaseOrderPage = memo(() => {
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [formData, setFormData] = useState({
-    materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: '', expectedDate: '', remark: ''
+    materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: '', expectedDate: '', status: 'draft', remark: ''
   });
 
   const fetchData = useCallback(async () => {
@@ -125,9 +128,15 @@ const PurchaseOrderPage = memo(() => {
       unitPrice: formData.unitPrice,
       orderDate: formData.orderDate,
       expectedDate: formData.expectedDate,
+      status: formData.status || 'draft',
       remark: formData.remark || '',
       totalAmount: formData.quantity * formData.unitPrice
     };
+    
+    // 编辑时加上 poNo
+    if (editingOrder) {
+      submitData.poNo = editingOrder.poNo;
+    }
     
     const endpoint = editingOrder ? `/api/purchase-orders/${editingOrder.id}` : '/api/purchase-orders';
     const method = editingOrder ? 'PUT' : 'POST';
@@ -144,25 +153,38 @@ const PurchaseOrderPage = memo(() => {
   };
 
   const handleStatusChange = async (order, newStatus) => {
-    // 使用 PUT 更新状态
-    const updateData = {
-      materialId: order.materialId,
-      supplierId: order.supplierId,
-      quantity: order.quantity,
-      unitPrice: order.unitPrice || 0,
-      orderDate: order.orderDate,
-      expectedDate: order.expectedDate,
-      status: newStatus,
-      poNo: order.poNo,
-      remark: order.remark || ''
+    // 格式化日期为 YYYY-MM-DD
+    const formatDateForApi = (dateStr) => {
+      if (!dateStr) return null;
+      const d = new Date(dateStr);
+      return d.toISOString().split('T')[0]; // 只取 YYYY-MM-DD 部分
     };
+
+    // 使用 PUT 更新状态 - 确保所有必填字段都有值
+    const updateData = {
+      materialId: parseInt(order.materialId || order.material_id),
+      supplierId: parseInt(order.supplierId || order.supplier_id),
+      quantity: order.quantity || 0,
+      unitPrice: order.unitPrice || order.unit_price || 0,
+      orderDate: formatDateForApi(order.orderDate || order.order_date),
+      expectedDate: formatDateForApi(order.expectedDate || order.expected_date),
+      status: newStatus,
+      poNo: order.poNo || order.po_no,
+      remark: order.remark || '',
+      totalAmount: order.totalAmount || order.total_amount || (order.quantity * (order.unitPrice || order.unit_price || 0))
+    };
+    
+    console.log('状态更新数据:', updateData);
     
     const res = await request(`/api/purchase-orders/${order.id}`, { 
       method: 'PUT', 
       body: JSON.stringify(updateData) 
     });
     if (res.success) fetchData();
-    else alert(res.message || '状态更新失败');
+    else {
+      console.error('状态更新失败:', res);
+      alert(res.message || '状态更新失败');
+    }
   };
 
   const openModal = (order = null) => {
@@ -175,10 +197,11 @@ const PurchaseOrderPage = memo(() => {
         unitPrice: order.unitPrice || 0,
         orderDate: formatDateInput(order.orderDate), 
         expectedDate: formatDateInput(order.expectedDate), 
+        status: order.status || 'draft',
         remark: order.remark || ''
       });
     } else {
-      setFormData({ materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: new Date().toISOString().split('T')[0], expectedDate: '', remark: '' });
+      setFormData({ materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: new Date().toISOString().split('T')[0], expectedDate: '', status: 'draft', remark: '' });
     }
     setShowModal(true);
   };
@@ -295,6 +318,16 @@ const PurchaseOrderPage = memo(() => {
           <Input label="预计到货日期" type="date" value={formData.expectedDate} onChange={v => setFormData({ ...formData, expectedDate: v })} required />
         </div>
         
+        {/* 管理员可以编辑状态 */}
+        {isAdmin && editingOrder && (
+          <Select 
+            label="状态（仅管理员可修改）" 
+            value={formData.status} 
+            onChange={v => setFormData({ ...formData, status: v })} 
+            options={Object.entries(PO_STATUS).map(([k, v]) => ({ value: k, label: v.text }))} 
+          />
+        )}
+        
         <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', marginBottom: '16px' }}>
           <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>状态流转说明</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', flexWrap: 'wrap' }}>
@@ -308,6 +341,7 @@ const PurchaseOrderPage = memo(() => {
             <span>→</span>
             <span style={{ padding: '4px 8px', background: '#d1fae5', color: '#10b981', borderRadius: '4px' }}>已到货</span>
           </div>
+          {!isAdmin && <div style={{ marginTop: '8px', fontSize: '11px', color: '#94a3b8' }}>* 采购员请使用列表中的状态按钮推进订单状态</div>}
         </div>
         
         <div style={{ padding: '12px 16px', background: '#f0fdf4', borderRadius: '8px', marginBottom: '16px' }}>
