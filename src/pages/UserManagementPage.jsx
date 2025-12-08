@@ -1,6 +1,6 @@
-// src/pages/UserManagementPage.jsx - 配合后端软删除版本
+// src/pages/UserManagementPage.jsx - 支持查看已删除用户
 import React, { memo, useState, useCallback, useEffect } from 'react';
-import { UserPlus, Edit, Trash2, Save, Users, Power, PowerOff, RefreshCw } from 'lucide-react';
+import { UserPlus, Edit, Trash2, Save, Users, Power, PowerOff, RefreshCw, RotateCcw, Archive } from 'lucide-react';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -101,26 +101,35 @@ const UserManagementPage = memo(() => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [viewMode, setViewMode] = useState('active'); // ✨ 新增：视图模式 active|deleted|all
   const [formData, setFormData] = useState({ username: '', password: '', realName: '', email: '', phone: '', roleId: '', isActive: true });
 
-  // ✅ 简化：后端已经过滤，前端不需要额外处理
+  // ✅ 根据视图模式获取用户
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [usersRes, rolesRes] = await Promise.all([request('/api/users'), request('/api/roles')]);
+    
+    // 根据视图模式设置 showDeleted 参数
+    let showDeleted = 'false';
+    if (viewMode === 'deleted') showDeleted = 'only';
+    if (viewMode === 'all') showDeleted = 'all';
+    
+    const [usersRes, rolesRes] = await Promise.all([
+      request(`/api/users?showDeleted=${showDeleted}`), 
+      request('/api/roles')
+    ]);
     
     if (usersRes.success) {
       const usersList = usersRes.data?.list || usersRes.data || [];
-      console.log('👥 获取用户数量:', usersList.length);
+      console.log(`👥 ${viewMode === 'deleted' ? '已删除' : viewMode === 'all' ? '全部' : '活跃'}用户数量:`, usersList.length);
       setUsers(usersList);
     }
     
     if (rolesRes.success) {
       const rolesList = rolesRes.data?.list || rolesRes.data || [];
-      console.log('🎭 获取角色数量:', rolesList.length);
       setRoles(rolesList);
     }
     setLoading(false);
-  }, [request]);
+  }, [request, viewMode]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -131,9 +140,7 @@ const UserManagementPage = memo(() => {
       email: formData.email || '',
       phone: formData.phone || '',
       roleId: parseInt(formData.roleId),
-      role_id: parseInt(formData.roleId),
-      isActive: formData.isActive,
-      is_active: formData.isActive
+      isActive: formData.isActive
     };
     if (!editingUser) submitData.password = formData.password;
     
@@ -151,21 +158,34 @@ const UserManagementPage = memo(() => {
     }
   };
 
-  // ✅ 简化：使用DELETE请求（后端会软删除）
   const handleDelete = async (id, username) => {
-    if (!window.confirm(`确定要删除用户 "${username}" 吗？此操作无法撤销！`)) return;
+    if (!window.confirm(`确定要删除用户 "${username}" 吗？`)) return;
     
-    console.log('🗑️ 删除用户:', username, 'ID:', id);
+    console.log('🗑️ 删除用户:', username);
     
     const res = await request(`/api/users/${id}`, { method: 'DELETE' });
     
-    console.log('📥 删除响应:', res);
-    
     if (res.success) {
       alert('删除成功！');
-      fetchData(); // 重新获取（后端已过滤已删除用户）
+      fetchData();
     } else {
       alert(res.message || '删除失败');
+    }
+  };
+
+  // ✨ 新增：恢复用户
+  const handleRestore = async (id, username) => {
+    if (!window.confirm(`确定要恢复用户 "${username}" 吗？`)) return;
+    
+    console.log('♻️ 恢复用户:', username);
+    
+    const res = await request(`/api/users/${id}/restore`, { method: 'POST' });
+    
+    if (res.success) {
+      alert('恢复成功！');
+      fetchData();
+    } else {
+      alert(res.message || '恢复失败');
     }
   };
 
@@ -175,14 +195,11 @@ const UserManagementPage = memo(() => {
     if (!window.confirm(`确定要${newStatus ? '启用' : '停用'}用户 "${user.username}" 吗？`)) return;
     
     const updateData = {
-      username: user.username,
       realName: user.realName || user.real_name || '',
       email: user.email || '',
       phone: user.phone || '',
       roleId: parseInt(user.roleId || user.role_id),
-      role_id: parseInt(user.roleId || user.role_id),
-      isActive: newStatus,
-      is_active: newStatus
+      isActive: newStatus
     };
     
     const res = await request(`/api/users/${user.id}`, { method: 'PUT', body: JSON.stringify(updateData) });
@@ -222,12 +239,12 @@ const UserManagementPage = memo(() => {
   };
 
   const getRoleName = (roleId) => {
-    const role = roles.find(r => r.id == roleId || r.roleId == roleId || r.role_id == roleId);
+    const role = roles.find(r => r.id == roleId);
     return role ? (role.roleName || role.role_name || role.name || '-') : '-';
   };
 
   const getRoleOptions = () => roles.map(r => ({
-    value: String(r.id || r.roleId || r.role_id),
+    value: String(r.id),
     label: r.roleName || r.role_name || r.name || `角色${r.id}`
   }));
 
@@ -235,7 +252,7 @@ const UserManagementPage = memo(() => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0' }}>用户管理</h1>
           <p style={{ fontSize: '15px', color: '#64748b', margin: 0 }}>管理系统用户账号和权限</p>
@@ -246,9 +263,71 @@ const UserManagementPage = memo(() => {
         </div>
       </div>
 
+      {/* ✨ 新增：视图模式切换 */}
+      <Card style={{ marginBottom: '16px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <span style={{ fontSize: '14px', fontWeight: 600, color: '#64748b', marginRight: '12px' }}>显示：</span>
+          <button
+            onClick={() => setViewMode('active')}
+            style={{
+              padding: '10px 18px',
+              borderRadius: '10px',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '13px',
+              background: viewMode === 'active' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : '#f1f5f9',
+              color: viewMode === 'active' ? '#fff' : '#64748b',
+              transition: 'all 0.2s'
+            }}
+          >
+            ✓ 活跃用户
+          </button>
+          <button
+            onClick={() => setViewMode('deleted')}
+            style={{
+              padding: '10px 18px',
+              borderRadius: '10px',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '13px',
+              background: viewMode === 'deleted' ? 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)' : '#f1f5f9',
+              color: viewMode === 'deleted' ? '#fff' : '#64748b',
+              transition: 'all 0.2s'
+            }}
+          >
+            🗑️ 已删除用户
+          </button>
+          <button
+            onClick={() => setViewMode('all')}
+            style={{
+              padding: '10px 18px',
+              borderRadius: '10px',
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: 600,
+              fontSize: '13px',
+              background: viewMode === 'all' ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : '#f1f5f9',
+              color: viewMode === 'all' ? '#fff' : '#64748b',
+              transition: 'all 0.2s'
+            }}
+          >
+            📋 全部用户
+          </button>
+          <div style={{ marginLeft: 'auto', fontSize: '13px', color: '#64748b', fontWeight: 600 }}>
+            共 {users.length} 个用户
+          </div>
+        </div>
+      </Card>
+
       <Card>
         {users.length === 0 ? (
-          <EmptyState icon={Users} title="暂无用户" description="点击新增用户按钮添加" />
+          <EmptyState 
+            icon={viewMode === 'deleted' ? Archive : Users} 
+            title={viewMode === 'deleted' ? '暂无已删除用户' : '暂无用户'} 
+            description={viewMode === 'deleted' ? '所有用户都是活跃状态' : '点击新增用户按钮添加'} 
+          />
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -266,9 +345,17 @@ const UserManagementPage = memo(() => {
               <tbody>
                 {users.map(user => {
                   const isActive = user.isActive !== undefined ? user.isActive : user.is_active;
+                  const isDeleted = user.isDeleted || user.is_deleted;
+                  
                   return (
-                    <tr key={user.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '16px', fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>{user.username}</td>
+                    <tr key={user.id} style={{ 
+                      borderBottom: '1px solid #f1f5f9',
+                      background: isDeleted ? '#fef2f2' : 'transparent'  // 已删除用户淡红色背景
+                    }}>
+                      <td style={{ padding: '16px', fontSize: '14px', fontWeight: 700, color: isDeleted ? '#dc2626' : '#0f172a' }}>
+                        {user.username}
+                        {isDeleted && <span style={{ marginLeft: '8px', fontSize: '11px', padding: '2px 6px', background: '#fee2e2', color: '#dc2626', borderRadius: '4px' }}>已删除</span>}
+                      </td>
                       <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{user.realName || user.real_name || '-'}</td>
                       <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{user.email || '-'}</td>
                       <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{user.phone || '-'}</td>
@@ -278,20 +365,37 @@ const UserManagementPage = memo(() => {
                         </span>
                       </td>
                       <td style={{ padding: '16px', textAlign: 'center' }}>
-                        <span style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 600, borderRadius: '20px', 
-                          background: isActive ? '#dcfce7' : '#fee2e2', color: isActive ? '#16a34a' : '#dc2626' }}>
-                          {isActive ? '启用' : '停用'}
-                        </span>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                          <span style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 600, borderRadius: '20px', 
+                            background: isActive ? '#dcfce7' : '#fee2e2', color: isActive ? '#16a34a' : '#dc2626' }}>
+                            {isActive ? '启用' : '停用'}
+                          </span>
+                          {isDeleted && (
+                            <span style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 600, borderRadius: '20px', background: '#fee2e2', color: '#dc2626' }}>
+                              已删除
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td style={{ padding: '16px', textAlign: 'center' }}>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                          <Button size="sm" variant={isActive ? 'warning' : 'success'} icon={isActive ? PowerOff : Power}
-                            onClick={() => handleToggleActive(user)}>
-                            {isActive ? '停用' : '启用'}
-                          </Button>
-                          <Button size="sm" variant="secondary" icon={Edit} onClick={() => openModal(user)}>编辑</Button>
-                          <Button size="sm" variant="secondary" onClick={() => handleResetPassword(user.id)}>重置密码</Button>
-                          <Button size="sm" variant="danger" icon={Trash2} onClick={() => handleDelete(user.id, user.username)}>删除</Button>
+                          {/* 已删除用户的操作 */}
+                          {isDeleted ? (
+                            <Button size="sm" variant="success" icon={RotateCcw} onClick={() => handleRestore(user.id, user.username)}>
+                              恢复
+                            </Button>
+                          ) : (
+                            /* 活跃用户的操作 */
+                            <>
+                              <Button size="sm" variant={isActive ? 'warning' : 'success'} icon={isActive ? PowerOff : Power}
+                                onClick={() => handleToggleActive(user)}>
+                                {isActive ? '停用' : '启用'}
+                              </Button>
+                              <Button size="sm" variant="secondary" icon={Edit} onClick={() => openModal(user)}>编辑</Button>
+                              <Button size="sm" variant="secondary" onClick={() => handleResetPassword(user.id)}>重置密码</Button>
+                              <Button size="sm" variant="danger" icon={Trash2} onClick={() => handleDelete(user.id, user.username)}>删除</Button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
