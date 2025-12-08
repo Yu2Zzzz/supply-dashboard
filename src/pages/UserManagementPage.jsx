@@ -134,13 +134,20 @@ const UserManagementPage = memo(() => {
     if (usersRes.success) {
       const usersList = usersRes.data?.list || usersRes.data || [];
       
+      console.log('📋 原始用户列表:', usersList);
+      
       // ✅ 修复：过滤掉已删除的用户（软删除）
       const activeUsers = usersList.filter(u => {
-        const isDeleted = u.isDeleted || u.is_deleted;
+        const isDeleted = u.isDeleted || u.is_deleted || u.deleted;
+        
+        // 详细输出每个用户的删除状态
+        console.log(`用户 ${u.username}: isDeleted=${u.isDeleted}, is_deleted=${u.is_deleted}, deleted=${u.deleted}, 过滤=${!!isDeleted}`);
+        
         return !isDeleted; // 只保留未删除的用户
       });
       
       console.log('📊 用户统计 - 总数:', usersList.length, '活跃:', activeUsers.length, '已删除:', usersList.length - activeUsers.length);
+      console.log('✅ 过滤后的用户:', activeUsers.map(u => u.username));
       
       setUsers(activeUsers);
     }
