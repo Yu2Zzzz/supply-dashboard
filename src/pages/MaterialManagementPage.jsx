@@ -474,7 +474,7 @@ const MaterialManagementPage = memo(() => {
                   </div>
                   <div style={{ fontSize: '11px', color: '#064e3b', marginTop: '2px' }}>/ {warehouses.length} 个</div>
                 </div>
-                <div style={{ width: '1px', background: '#10b981', opacity: 0.2' }} />
+                <div style={{ width: '1px', background: '#10b981', opacity: 0.2 }} />
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '12px', color: '#064e3b', fontWeight: 600, marginBottom: '4px' }}>总安全库存</div>
                   <div style={{ fontSize: '28px', fontWeight: 800, color: '#10b981' }}>
