@@ -568,7 +568,7 @@ const MaterialManagementPage = memo(() => {
                                 <div style={{ fontSize: '12px', color: '#1e40af', marginTop: '4px' }}>
                                   数量: {inventory.quantity} → {inventoryFormData.quantity} 
                                   <span style={{ fontWeight: 700, marginLeft: '8px' }}>
-                                    ({inventoryFormData.quantity > inventory.quantity ? '+' : ''}{number(inventoryFormData.quantity - inventory.quantity).toFixed(1)})
+                                    ({inventoryFormData.quantity > inventory.quantity ? '+' : ''}{Number(inventoryFormData.quantity - inventory.quantity).toFixed(1)})
                                   </span>
                                 </div>
                               )}
