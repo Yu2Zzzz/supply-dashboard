@@ -12,6 +12,7 @@ import SalesOrderPage from './pages/SalesOrderPage';
 import PurchaseOrderPage from './pages/PurchaseOrderPage';
 import UserManagementPage from './pages/UserManagementPage';
 import WarehouseManagementPage from './pages/WarehouseManagementPage';
+import ProductManagementPage from './pages/ProductManagementPage';
 // ============ API 配置 ============
 
 
@@ -820,23 +821,7 @@ const CrudManagementPage = memo(({ title, subtitle, apiEndpoint, columns, formFi
 });
 
 // ============ 产品/物料/供应商/仓库管理（使用通用CRUD） ============
-const ProductManagementPage = memo(() => (
-  <CrudManagementPage title="产品管理" subtitle="管理产品信息和BOM" apiEndpoint="/api/products" icon={Package}
-    columns={[
-      { key: 'productCode', title: '产品编码', render: (v) => <span style={{ fontWeight: 700, color: '#0f172a' }}>{v}</span> },
-      { key: 'name', title: '产品名称' },
-      { key: 'category', title: '类别' },
-      { key: 'unit', title: '单位', align: 'center' },
-      { key: 'status', title: '状态', align: 'center', render: (v) => <span style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 600, borderRadius: '20px', background: v === 'active' ? '#dcfce7' : '#fee2e2', color: v === 'active' ? '#16a34a' : '#dc2626' }}>{v === 'active' ? '启用' : '停用'}</span> },
-    ]}
-    formFields={[
-      { key: 'productCode', label: '产品编码', required: true },
-      { key: 'name', label: '产品名称', required: true },
-      { key: 'category', label: '类别' },
-      { key: 'unit', label: '单位', defaultValue: 'PCS' },
-    ]}
-  />
-));
+// ProductManagementPage 已移至 ./pages/ProductManagementPage.jsx
 
 const MaterialManagementPage = memo(() => (
   <CrudManagementPage title="物料管理" subtitle="管理物料主数据" apiEndpoint="/api/materials" icon={Layers}
