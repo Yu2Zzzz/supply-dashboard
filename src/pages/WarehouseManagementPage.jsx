@@ -158,6 +158,93 @@ const WarehouseManagementPage = memo(() => {
     setInventoryLoading(false);
   }, [request]);
 
+  // 初始化物料库存
+  const [syncing, setSyncing] = useState(false);
+  
+  const initMaterialInventory = async () => {
+    if (!window.confirm('确定要初始化物料库存吗？这会为该仓库添加所有物料的库存记录（初始数量为0）')) return;
+    
+    setSyncing(true);
+    try {
+      // 先获取所有物料
+      const matRes = await request('/api/materials');
+      const materials = matRes.data?.list || matRes.data || [];
+      
+      if (materials.length === 0) {
+        alert('没有找到物料数据');
+        setSyncing(false);
+        return;
+      }
+      
+      let successCount = 0;
+      let skipCount = 0;
+      
+      for (const mat of materials) {
+        const res = await request('/api/inventory', {
+          method: 'POST',
+          body: JSON.stringify({
+            type: 'material',
+            itemId: mat.id,
+            warehouseId: selectedWarehouse.id,
+            quantity: 0,
+            safetyStock: mat.safetyStock || mat.safety_stock || 100
+          })
+        });
+        if (res.success) successCount++;
+        else skipCount++;
+      }
+      
+      alert(`物料库存初始化完成！\n新增: ${successCount} 条\n跳过（已存在）: ${skipCount} 条`);
+      fetchInventory(selectedWarehouse.id);
+    } catch (e) {
+      console.error('初始化物料库存失败:', e);
+      alert('初始化失败: ' + e.message);
+    }
+    setSyncing(false);
+  };
+
+  const initProductInventory = async () => {
+    if (!window.confirm('确定要初始化产品库存吗？这会为该仓库添加所有产品的库存记录（初始数量为0）')) return;
+    
+    setSyncing(true);
+    try {
+      // 先获取所有产品
+      const prodRes = await request('/api/products');
+      const products = prodRes.data?.list || prodRes.data || [];
+      
+      if (products.length === 0) {
+        alert('没有找到产品数据');
+        setSyncing(false);
+        return;
+      }
+      
+      let successCount = 0;
+      let skipCount = 0;
+      
+      for (const prod of products) {
+        const res = await request('/api/inventory', {
+          method: 'POST',
+          body: JSON.stringify({
+            type: 'product',
+            itemId: prod.id,
+            warehouseId: selectedWarehouse.id,
+            quantity: 0,
+            safetyStock: 100
+          })
+        });
+        if (res.success) successCount++;
+        else skipCount++;
+      }
+      
+      alert(`产品库存初始化完成！\n新增: ${successCount} 条\n跳过（已存在）: ${skipCount} 条`);
+      fetchInventory(selectedWarehouse.id);
+    } catch (e) {
+      console.error('初始化产品库存失败:', e);
+      alert('初始化失败: ' + e.message);
+    }
+    setSyncing(false);
+  };
+
   // 选择仓库查看库存
   const handleWarehouseClick = (warehouse) => {
     setSelectedWarehouse(warehouse);
@@ -309,7 +396,19 @@ const WarehouseManagementPage = memo(() => {
                 产品库存 ({productInventory.length})
               </button>
             </div>
-            <Button variant="secondary" icon={RefreshCw} onClick={() => fetchInventory(selectedWarehouse.id)}>刷新</Button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {canEdit && inventoryTab === 'materials' && materialInventory.length === 0 && (
+                <Button variant="success" icon={Plus} onClick={initMaterialInventory} disabled={syncing}>
+                  {syncing ? '初始化中...' : '初始化物料库存'}
+                </Button>
+              )}
+              {canEdit && inventoryTab === 'products' && productInventory.length === 0 && (
+                <Button variant="success" icon={Plus} onClick={initProductInventory} disabled={syncing}>
+                  {syncing ? '初始化中...' : '初始化产品库存'}
+                </Button>
+              )}
+              <Button variant="secondary" icon={RefreshCw} onClick={() => fetchInventory(selectedWarehouse.id)}>刷新</Button>
+            </div>
           </div>
         </Card>
 
