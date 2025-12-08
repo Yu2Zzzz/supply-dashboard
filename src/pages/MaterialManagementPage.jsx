@@ -369,7 +369,7 @@ const MaterialManagementPage = memo(() => {
                       <td style={{ padding: '16px', fontSize: '13px', color: '#64748b' }}>{material.spec || '-'}</td>
                       <td style={{ padding: '16px', fontSize: '13px', color: '#64748b' }}>{material.unit}</td>
                       <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#10b981', textAlign: 'right' }}>
-                        ¥{(material.price || 0).toFixed(2)}
+                        ¥{Number(material.price ?? 0).toFixed(2)}
                       </td>
                       <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#3b82f6', textAlign: 'right' }}>
                         {material.safeStock || material.safe_stock || 100}
@@ -462,7 +462,7 @@ const MaterialManagementPage = memo(() => {
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '12px', color: '#064e3b', fontWeight: 600, marginBottom: '4px' }}>总库存</div>
                   <div style={{ fontSize: '28px', fontWeight: 800, color: '#10b981' }}>
-                    {materialInventories.reduce((sum, inv) => sum + (inv.quantity || 0), 0).toFixed(1)}
+                    {materialInventories.reduce((sum, inv) => sum + Number(inv.quantity || 0), 0).toFixed(1)}
                   </div>
                   <div style={{ fontSize: '11px', color: '#064e3b', marginTop: '2px' }}>{inventoryMaterial?.unit}</div>
                 </div>
@@ -568,7 +568,7 @@ const MaterialManagementPage = memo(() => {
                                 <div style={{ fontSize: '12px', color: '#1e40af', marginTop: '4px' }}>
                                   数量: {inventory.quantity} → {inventoryFormData.quantity} 
                                   <span style={{ fontWeight: 700, marginLeft: '8px' }}>
-                                    ({inventoryFormData.quantity > inventory.quantity ? '+' : ''}{(inventoryFormData.quantity - inventory.quantity).toFixed(1)})
+                                    ({inventoryFormData.quantity > inventory.quantity ? '+' : ''}{number(inventoryFormData.quantity - inventory.quantity).toFixed(1)})
                                   </span>
                                 </div>
                               )}
@@ -586,7 +586,7 @@ const MaterialManagementPage = memo(() => {
                           <div>
                             <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '6px' }}>当前库存</div>
                             <div style={{ fontSize: '20px', fontWeight: 700, color: '#0f172a' }}>
-                              {(inventory.quantity || 0).toFixed(1)}
+                              {Number(inventory.quantity || 0).toFixed(1)}
                               <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, marginLeft: '6px' }}>{inventoryMaterial?.unit}</span>
                             </div>
                           </div>
