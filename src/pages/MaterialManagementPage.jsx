@@ -563,7 +563,7 @@ const MaterialManagementPage = memo(() => {
                           {/* 变化提示 */}
                           {(inventoryFormData.quantity !== inventory.quantity || inventoryFormData.safetyStock !== inventory.safetyStock) && (
                             <div style={{ gridColumn: '1 / -1', padding: '10px 14px', background: '#eff6ff', borderRadius: '8px', border: '1px solid #3b82f6' }}>
-                              <div style={{ fontSize: '12px', color: '#1e40af', fontWeight: 600' }}>📊 变化预览：</div>
+                              <div style={{ fontSize: '12px', color: '#1e40af', fontWeight: 600 }}>📊 变化预览：</div>
                               {inventoryFormData.quantity !== inventory.quantity && (
                                 <div style={{ fontSize: '12px', color: '#1e40af', marginTop: '4px' }}>
                                   数量: {inventory.quantity} → {inventoryFormData.quantity} 
