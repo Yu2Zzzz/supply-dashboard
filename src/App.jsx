@@ -824,27 +824,6 @@ const CrudManagementPage = memo(({ title, subtitle, apiEndpoint, columns, formFi
 // ============ 产品/物料/供应商/仓库管理（使用通用CRUD） ============
 // ProductManagementPage 已移至 ./pages/ProductManagementPage.jsx
 
-const MaterialManagementPage = memo(() => (
-  <CrudManagementPage title="物料管理" subtitle="管理物料主数据" apiEndpoint="/api/materials" icon={Layers}
-    columns={[
-      { key: 'materialCode', title: '物料编码', render: (v) => <span style={{ fontWeight: 700, color: '#0f172a' }}>{v}</span> },
-      { key: 'name', title: '物料名称' },
-      { key: 'spec', title: '规格' },
-      { key: 'unit', title: '单位', align: 'center' },
-      { key: 'safeStock', title: '安全库存', align: 'center' },
-      { key: 'buyer', title: '采购员' },
-    ]}
-    formFields={[
-      { key: 'materialCode', label: '物料编码', required: true },
-      { key: 'name', label: '物料名称', required: true },
-      { key: 'spec', label: '规格' },
-      { key: 'unit', label: '单位', defaultValue: 'PCS' },
-      { key: 'safeStock', label: '安全库存', type: 'number', defaultValue: 0 },
-      { key: 'leadTime', label: '采购周期(天)', type: 'number', defaultValue: 7 },
-      { key: 'buyer', label: '采购员' },
-    ]}
-  />
-));
 
 const SupplierManagementPage = memo(() => (
   <CrudManagementPage title="供应商管理" subtitle="管理供应商信息" apiEndpoint="/api/suppliers" icon={Building}
