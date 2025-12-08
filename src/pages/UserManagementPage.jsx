@@ -203,16 +203,22 @@ const UserManagementPage = memo(() => {
     
     console.log('🗑️ 删除用户 ID:', id);
     
+    // ✅ 修复：立即从UI移除，不等后端响应
+    setUsers(prevUsers => prevUsers.filter(u => u.id !== id));
+    
     const res = await request(`/api/users/${id}`, { method: 'DELETE' });
     
     console.log('📥 删除响应:', res);
     
     if (res.success) {
-      fetchData();
       alert('删除成功！');
+      // 重新获取数据确认
+      setTimeout(() => fetchData(), 500);
     } else {
       console.error('❌ 删除失败:', res);
-      alert(res.message || res.error || '删除失败，请查看控制台');
+      alert(res.message || res.error || '删除失败');
+      // 删除失败，恢复用户列表
+      fetchData();
     }
   };
 
