@@ -131,7 +131,20 @@ const UserManagementPage = memo(() => {
     console.log('👥 用户数据:', usersRes);
     console.log('🎭 角色数据:', rolesRes);
     
-    if (usersRes.success) setUsers(usersRes.data?.list || usersRes.data || []);
+    if (usersRes.success) {
+      const usersList = usersRes.data?.list || usersRes.data || [];
+      
+      // ✅ 修复：过滤掉已删除的用户（软删除）
+      const activeUsers = usersList.filter(u => {
+        const isDeleted = u.isDeleted || u.is_deleted;
+        return !isDeleted; // 只保留未删除的用户
+      });
+      
+      console.log('📊 用户统计 - 总数:', usersList.length, '活跃:', activeUsers.length, '已删除:', usersList.length - activeUsers.length);
+      
+      setUsers(activeUsers);
+    }
+    
     if (rolesRes.success) {
       const rolesList = rolesRes.data?.list || rolesRes.data || [];
       console.log('📋 角色列表:', rolesList);
