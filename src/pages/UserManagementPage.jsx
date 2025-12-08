@@ -1,4 +1,4 @@
-// src/pages/UserManagementPage.jsx - 终极删除修复版
+// src/pages/UserManagementPage.jsx - 配合后端软删除版本
 import React, { memo, useState, useCallback, useEffect } from 'react';
 import { UserPlus, Edit, Trash2, Save, Users, Power, PowerOff, RefreshCw } from 'lucide-react';
 import { useApi } from '../hooks/useApi';
@@ -101,44 +101,26 @@ const UserManagementPage = memo(() => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
-  
-  // ✨ 追踪前端删除的用户ID（持久化）
-  const [deletedIds, setDeletedIds] = useState(() => {
-    const saved = localStorage.getItem('deletedUserIds');
-    return saved ? JSON.parse(saved) : [];
-  });
-  
   const [formData, setFormData] = useState({ username: '', password: '', realName: '', email: '', phone: '', roleId: '', isActive: true });
 
+  // ✅ 简化：后端已经过滤，前端不需要额外处理
   const fetchData = useCallback(async () => {
     setLoading(true);
     const [usersRes, rolesRes] = await Promise.all([request('/api/users'), request('/api/roles')]);
     
     if (usersRes.success) {
       const usersList = usersRes.data?.list || usersRes.data || [];
-      
-      // ✅ 强制过滤：后端删除标记 + 前端删除ID列表
-      const activeUsers = usersList.filter(u => {
-        // 后端软删除
-        if (u.isDeleted || u.is_deleted || u.deleted) return false;
-        // 前端追踪的删除ID
-        if (deletedIds.includes(u.id)) {
-          console.log(`🗑️ 前端已删除用户: ${u.username} (ID: ${u.id})`);
-          return false;
-        }
-        return true;
-      });
-      
-      console.log('📊 用户过滤 - 原始:', usersList.length, '显示:', activeUsers.length, '前端删除:', deletedIds.length);
-      setUsers(activeUsers);
+      console.log('👥 获取用户数量:', usersList.length);
+      setUsers(usersList);
     }
     
     if (rolesRes.success) {
       const rolesList = rolesRes.data?.list || rolesRes.data || [];
+      console.log('🎭 获取角色数量:', rolesList.length);
       setRoles(rolesList);
     }
     setLoading(false);
-  }, [request, deletedIds]);
+  }, [request]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -169,54 +151,29 @@ const UserManagementPage = memo(() => {
     }
   };
 
-  // ✅ 终极删除方案：多方法尝试 + 前端追踪
+  // ✅ 简化：使用DELETE请求（后端会软删除）
   const handleDelete = async (id, username) => {
     if (!window.confirm(`确定要删除用户 "${username}" 吗？此操作无法撤销！`)) return;
     
-    console.log('🗑️ 开始删除用户:', username, 'ID:', id);
+    console.log('🗑️ 删除用户:', username, 'ID:', id);
     
-    // 方法1: 软删除（PUT标记）
-    console.log('📝 尝试软删除...');
-    const softRes = await request(`/api/users/${id}`, { 
-      method: 'PUT',
-      body: JSON.stringify({ isDeleted: 1, is_deleted: 1, deleted: 1, isActive: 0, is_active: 0 })
-    });
+    const res = await request(`/api/users/${id}`, { method: 'DELETE' });
     
-    if (softRes.success) {
-      console.log('✅ 软删除成功');
+    console.log('📥 删除响应:', res);
+    
+    if (res.success) {
+      alert('删除成功！');
+      fetchData(); // 重新获取（后端已过滤已删除用户）
     } else {
-      console.log('⚠️ 软删除失败，尝试硬删除...');
-      
-      // 方法2: 硬删除（DELETE）
-      const hardRes = await request(`/api/users/${id}`, { method: 'DELETE' });
-      console.log('硬删除响应:', hardRes);
-    }
-    
-    // ✨ 无论后端成功与否，都在前端标记删除
-    const newDeletedIds = [...deletedIds, id];
-    setDeletedIds(newDeletedIds);
-    localStorage.setItem('deletedUserIds', JSON.stringify(newDeletedIds));
-    
-    console.log('💾 前端删除ID列表已更新:', newDeletedIds);
-    
-    // 立即从UI移除
-    setUsers(prevUsers => prevUsers.filter(u => u.id !== id));
-    
-    alert('删除成功！');
-  };
-
-  // ✨ 清除前端删除记录
-  const clearDeletedIds = () => {
-    if (window.confirm('确定要清除前端删除记录吗？这会让被删除的用户重新显示。')) {
-      setDeletedIds([]);
-      localStorage.removeItem('deletedUserIds');
-      fetchData();
-      alert('已清除记录');
+      alert(res.message || '删除失败');
     }
   };
 
   const handleToggleActive = async (user) => {
-    const newStatus = !user.isActive;
+    const newStatus = !(user.isActive || user.is_active);
+    
+    if (!window.confirm(`确定要${newStatus ? '启用' : '停用'}用户 "${user.username}" 吗？`)) return;
+    
     const updateData = {
       username: user.username,
       realName: user.realName || user.real_name || '',
@@ -281,16 +238,10 @@ const UserManagementPage = memo(() => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0' }}>用户管理</h1>
-          <p style={{ fontSize: '15px', color: '#64748b', margin: 0 }}>
-            管理系统用户账号和权限 {deletedIds.length > 0 && `（已隐藏 ${deletedIds.length} 个已删除用户）`}
-          </p>
+          <p style={{ fontSize: '15px', color: '#64748b', margin: 0 }}>管理系统用户账号和权限</p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
-          {deletedIds.length > 0 && (
-            <Button variant="warning" icon={RefreshCw} onClick={clearDeletedIds} size="sm">
-              清除删除记录
-            </Button>
-          )}
+          <Button variant="secondary" icon={RefreshCw} onClick={fetchData}>刷新</Button>
           <Button icon={UserPlus} onClick={() => openModal()}>新增用户</Button>
         </div>
       </div>
@@ -384,15 +335,9 @@ const UserManagementPage = memo(() => {
           </div>
         </div>
         
-        {roles.length === 0 && (
-          <div style={{ padding: '12px', background: '#fef3c7', borderRadius: '8px', marginBottom: '16px' }}>
-            <div style={{ fontSize: '13px', color: '#92400e', fontWeight: 600 }}>⚠️ 未找到角色数据，请先创建角色！</div>
-          </div>
-        )}
-        
         <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'flex-end' }}>
           <Button variant="secondary" onClick={() => setShowModal(false)}>取消</Button>
-          <Button icon={Save} onClick={handleSubmit} disabled={!formData.roleId && roles.length > 0}>保存</Button>
+          <Button icon={Save} onClick={handleSubmit}>保存</Button>
         </div>
       </Modal>
     </div>
