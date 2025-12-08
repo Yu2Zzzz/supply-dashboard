@@ -13,6 +13,7 @@ import PurchaseOrderPage from './pages/PurchaseOrderPage';
 import UserManagementPage from './pages/UserManagementPage';
 import WarehouseManagementPage from './pages/WarehouseManagementPage';
 import ProductManagementPage from './pages/ProductManagementPage';
+import MaterialManagementPage from './pages/MaterialManagementPage';
 // ============ API 配置 ============
 
 
