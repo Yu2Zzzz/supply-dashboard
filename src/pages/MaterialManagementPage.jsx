@@ -478,7 +478,7 @@ const MaterialManagementPage = memo(() => {
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '12px', color: '#064e3b', fontWeight: 600, marginBottom: '4px' }}>总安全库存</div>
                   <div style={{ fontSize: '28px', fontWeight: 800, color: '#10b981' }}>
-                    {materialInventories.reduce((sum, inv) => sum + (inv.safetyStock || 0), 0)}
+                    {materialInventories.reduce((sum, inv) => sum + Number(inv.safetyStock ?? 0), 0).toFixed(2)}
                   </div>
                   <div style={{ fontSize: '11px', color: '#064e3b', marginTop: '2px' }}>{inventoryMaterial?.unit}</div>
                 </div>
