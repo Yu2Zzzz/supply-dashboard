@@ -1,4 +1,4 @@
-// src/pages/WarehouseManagementPage.jsx - 完整版（包含库存编辑）
+// src/pages/WarehouseManagementPage.jsx - 修复版（添加/删除库存功能）
 import React, { memo, useState, useCallback, useEffect } from 'react';
 import { Warehouse, Plus, Search, RefreshCw, Edit, Trash2, Save, X, Package, Box, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { useApi } from '../hooks/useApi';
@@ -6,24 +6,11 @@ import { useAuth } from '../contexts/AuthContext';
 
 // ============ 内置 UI 组件 ============
 const Card = memo(({ children, style = {}, onClick }) => (
-  <div onClick={onClick} style={{ 
-    background: '#fff', borderRadius: '16px', padding: '24px', 
-    boxShadow: '0 1px 3px rgba(0,0,0,0.1)', 
-    cursor: onClick ? 'pointer' : 'default',
-    transition: 'all 0.2s',
-    ...style 
-  }}>
-    {children}
-  </div>
+  <div onClick={onClick} style={{ background: '#fff', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', cursor: onClick ? 'pointer' : 'default', transition: 'all 0.2s', ...style }}>{children}</div>
 ));
 
 const Button = memo(({ children, onClick, variant = 'primary', icon: Icon, size = 'md', disabled = false, style = {} }) => {
-  const baseStyle = {
-    display: 'inline-flex', alignItems: 'center', gap: '8px', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
-    fontWeight: 600, borderRadius: size === 'sm' ? '8px' : '12px', transition: 'all 0.2s',
-    padding: size === 'sm' ? '8px 12px' : '12px 20px', fontSize: size === 'sm' ? '12px' : '14px',
-    opacity: disabled ? 0.5 : 1, ...style
-  };
+  const baseStyle = { display: 'inline-flex', alignItems: 'center', gap: '8px', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: 600, borderRadius: size === 'sm' ? '8px' : '12px', transition: 'all 0.2s', padding: size === 'sm' ? '8px 12px' : '12px 20px', fontSize: size === 'sm' ? '12px' : '14px', opacity: disabled ? 0.5 : 1, ...style };
   const variants = {
     primary: { background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: '#fff' },
     secondary: { background: '#f1f5f9', color: '#374151' },
@@ -39,6 +26,17 @@ const Input = memo(({ label, value, onChange, placeholder, type = 'text', requir
     {label && <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>{label}{required && <span style={{ color: '#ef4444' }}> *</span>}</label>}
     <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
       style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', boxSizing: 'border-box', background: disabled ? '#f8fafc' : '#fff' }} />
+  </div>
+));
+
+const Select = memo(({ label, value, onChange, options, required = false, disabled = false }) => (
+  <div style={{ marginBottom: '16px' }}>
+    {label && <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>{label}{required && <span style={{ color: '#ef4444' }}> *</span>}</label>}
+    <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled}
+      style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', background: disabled ? '#f8fafc' : '#fff', cursor: 'pointer' }}>
+      <option value="">请选择</option>
+      {options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+    </select>
   </div>
 ));
 
@@ -59,9 +57,7 @@ const Modal = memo(({ isOpen, onClose, title, children, width = '500px' }) => {
 
 const EmptyState = memo(({ icon: Icon, title, description }) => (
   <div style={{ textAlign: 'center', padding: '48px 24px' }}>
-    <div style={{ width: '64px', height: '64px', margin: '0 auto 16px', background: '#f1f5f9', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <Icon size={28} style={{ color: '#94a3b8' }} />
-    </div>
+    <div style={{ width: '64px', height: '64px', margin: '0 auto 16px', background: '#f1f5f9', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon size={28} style={{ color: '#94a3b8' }} /></div>
     <div style={{ fontSize: '16px', fontWeight: 600, color: '#374151', marginBottom: '4px' }}>{title}</div>
     <div style={{ fontSize: '14px', color: '#94a3b8' }}>{description}</div>
   </div>
@@ -85,13 +81,13 @@ const WarehouseManagementPage = memo(() => {
   const canEdit = user?.role === 'admin' || user?.role === 'purchaser';
   
   const [warehouses, setWarehouses] = useState([]);
+  const [materials, setMaterials] = useState([]);
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingWarehouse, setEditingWarehouse] = useState(null);
   const [keyword, setKeyword] = useState('');
-  const [formData, setFormData] = useState({
-    warehouseCode: '', name: '', location: '', capacity: 0, manager: ''
-  });
+  const [formData, setFormData] = useState({ warehouseCode: '', name: '', location: '', capacity: 0, manager: '' });
   
   // 库存查看状态
   const [selectedWarehouse, setSelectedWarehouse] = useState(null);
@@ -105,11 +101,25 @@ const WarehouseManagementPage = memo(() => {
   const [editingInventory, setEditingInventory] = useState(null);
   const [inventoryForm, setInventoryForm] = useState({ quantity: 0, safetyStock: 0 });
 
+  // ✨ 添加库存弹窗
+  const [showAddInventoryModal, setShowAddInventoryModal] = useState(false);
+  const [addInventoryType, setAddInventoryType] = useState('material');
+  const [addInventoryForm, setAddInventoryForm] = useState({ itemId: '', quantity: 0, safetyStock: 100 });
+
+  // 初始化库存状态
+  const [syncing, setSyncing] = useState(false);
+
   // 获取仓库列表
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const res = await request('/api/warehouses');
-    if (res.success) setWarehouses(res.data?.list || res.data || []);
+    const [whRes, matRes, prodRes] = await Promise.all([
+      request('/api/warehouses'),
+      request('/api/materials'),
+      request('/api/products')
+    ]);
+    if (whRes.success) setWarehouses(whRes.data?.list || whRes.data || []);
+    if (matRes.success) setMaterials(matRes.data?.list || matRes.data || []);
+    if (prodRes.success) setProducts(prodRes.data?.list || prodRes.data || []);
     setLoading(false);
   }, [request]);
 
@@ -120,7 +130,6 @@ const WarehouseManagementPage = memo(() => {
     setInventoryLoading(true);
     
     try {
-      // 获取物料库存
       const matRes = await request(`/api/inventory?warehouseId=${warehouseId}&type=material`);
       if (matRes.success) {
         const list = matRes.data?.list || matRes.data || [];
@@ -136,7 +145,6 @@ const WarehouseManagementPage = memo(() => {
         })));
       }
       
-      // 获取产品库存
       const prodRes = await request(`/api/inventory?warehouseId=${warehouseId}&type=product`);
       if (prodRes.success) {
         const list = prodRes.data?.list || prodRes.data || [];
@@ -157,93 +165,6 @@ const WarehouseManagementPage = memo(() => {
     
     setInventoryLoading(false);
   }, [request]);
-
-  // 初始化物料库存
-  const [syncing, setSyncing] = useState(false);
-  
-  const initMaterialInventory = async () => {
-    if (!window.confirm('确定要初始化物料库存吗？这会为该仓库添加所有物料的库存记录（初始数量为0）')) return;
-    
-    setSyncing(true);
-    try {
-      // 先获取所有物料
-      const matRes = await request('/api/materials');
-      const materials = matRes.data?.list || matRes.data || [];
-      
-      if (materials.length === 0) {
-        alert('没有找到物料数据');
-        setSyncing(false);
-        return;
-      }
-      
-      let successCount = 0;
-      let skipCount = 0;
-      
-      for (const mat of materials) {
-        const res = await request('/api/inventory', {
-          method: 'POST',
-          body: JSON.stringify({
-            type: 'material',
-            itemId: mat.id,
-            warehouseId: selectedWarehouse.id,
-            quantity: 0,
-            safetyStock: mat.safetyStock || mat.safety_stock || 100
-          })
-        });
-        if (res.success) successCount++;
-        else skipCount++;
-      }
-      
-      alert(`物料库存初始化完成！\n新增: ${successCount} 条\n跳过（已存在）: ${skipCount} 条`);
-      fetchInventory(selectedWarehouse.id);
-    } catch (e) {
-      console.error('初始化物料库存失败:', e);
-      alert('初始化失败: ' + e.message);
-    }
-    setSyncing(false);
-  };
-
-  const initProductInventory = async () => {
-    if (!window.confirm('确定要初始化产品库存吗？这会为该仓库添加所有产品的库存记录（初始数量为0）')) return;
-    
-    setSyncing(true);
-    try {
-      // 先获取所有产品
-      const prodRes = await request('/api/products');
-      const products = prodRes.data?.list || prodRes.data || [];
-      
-      if (products.length === 0) {
-        alert('没有找到产品数据');
-        setSyncing(false);
-        return;
-      }
-      
-      let successCount = 0;
-      let skipCount = 0;
-      
-      for (const prod of products) {
-        const res = await request('/api/inventory', {
-          method: 'POST',
-          body: JSON.stringify({
-            type: 'product',
-            itemId: prod.id,
-            warehouseId: selectedWarehouse.id,
-            quantity: 0,
-            safetyStock: 100
-          })
-        });
-        if (res.success) successCount++;
-        else skipCount++;
-      }
-      
-      alert(`产品库存初始化完成！\n新增: ${successCount} 条\n跳过（已存在）: ${skipCount} 条`);
-      fetchInventory(selectedWarehouse.id);
-    } catch (e) {
-      console.error('初始化产品库存失败:', e);
-      alert('初始化失败: ' + e.message);
-    }
-    setSyncing(false);
-  };
 
   // 选择仓库查看库存
   const handleWarehouseClick = (warehouse) => {
@@ -268,24 +189,15 @@ const WarehouseManagementPage = memo(() => {
     const endpoint = editingWarehouse ? `/api/warehouses/${editingWarehouse.id}` : '/api/warehouses';
     const method = editingWarehouse ? 'PUT' : 'POST';
     const res = await request(endpoint, { method, body: JSON.stringify(formData) });
-    if (res.success) { 
-      setShowModal(false); 
-      fetchData(); 
-      alert('保存成功！');
-    } else {
-      alert(res.message || '操作失败');
-    }
+    if (res.success) { setShowModal(false); fetchData(); alert('保存成功！'); }
+    else { alert(res.message || '操作失败'); }
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm('确定要删除该仓库吗？')) return;
     const res = await request(`/api/warehouses/${id}`, { method: 'DELETE' });
-    if (res.success) {
-      fetchData();
-      alert('删除成功！');
-    } else {
-      alert(res.message || '删除失败');
-    }
+    if (res.success) { fetchData(); alert('删除成功！'); }
+    else { alert(res.message || '删除失败'); }
   };
 
   const openModal = (warehouse = null) => {
@@ -307,10 +219,7 @@ const WarehouseManagementPage = memo(() => {
   // 打开库存编辑弹窗
   const openInventoryEdit = (item) => {
     setEditingInventory(item);
-    setInventoryForm({
-      quantity: item.quantity || 0,
-      safetyStock: item.safetyStock || 0
-    });
+    setInventoryForm({ quantity: item.quantity || 0, safetyStock: item.safetyStock || 0 });
     setShowInventoryModal(true);
   };
 
@@ -334,6 +243,107 @@ const WarehouseManagementPage = memo(() => {
     }
   };
 
+  // ✨ 删除库存
+  const handleDeleteInventory = async (item) => {
+    if (!window.confirm(`确定要删除"${item.itemName}"的库存记录吗？`)) return;
+    
+    const res = await request(`/api/inventory/${item.id}?type=${item.type}`, { method: 'DELETE' });
+    if (res.success) {
+      fetchInventory(selectedWarehouse.id);
+      alert('库存删除成功！');
+    } else {
+      alert(res.message || '删除失败');
+    }
+  };
+
+  // ✨ 打开添加库存弹窗
+  const openAddInventory = (type) => {
+    setAddInventoryType(type);
+    setAddInventoryForm({ itemId: '', quantity: 0, safetyStock: 100 });
+    setShowAddInventoryModal(true);
+  };
+
+  // ✨ 添加库存
+  const handleAddInventory = async () => {
+    if (!addInventoryForm.itemId) {
+      alert('请选择物料/产品');
+      return;
+    }
+    
+    const res = await request('/api/inventory', {
+      method: 'POST',
+      body: JSON.stringify({
+        type: addInventoryType,
+        itemId: parseInt(addInventoryForm.itemId),
+        warehouseId: selectedWarehouse.id,
+        quantity: parseFloat(addInventoryForm.quantity) || 0,
+        safetyStock: parseFloat(addInventoryForm.safetyStock) || 100
+      })
+    });
+    
+    if (res.success) {
+      setShowAddInventoryModal(false);
+      fetchInventory(selectedWarehouse.id);
+      alert('库存添加成功！');
+    } else {
+      alert(res.message || '添加失败（可能该项目已存在）');
+    }
+  };
+
+  // 初始化物料库存
+  const initMaterialInventory = async () => {
+    if (!window.confirm('确定要初始化物料库存吗？这会为该仓库添加所有物料的库存记录（初始数量为0）')) return;
+    
+    setSyncing(true);
+    let successCount = 0, skipCount = 0;
+    
+    for (const mat of materials) {
+      const res = await request('/api/inventory', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'material',
+          itemId: mat.id,
+          warehouseId: selectedWarehouse.id,
+          quantity: 0,
+          safetyStock: mat.safetyStock || mat.safety_stock || 100
+        })
+      });
+      if (res.success) successCount++;
+      else skipCount++;
+    }
+    
+    alert(`物料库存初始化完成！\n新增: ${successCount} 条\n跳过（已存在）: ${skipCount} 条`);
+    fetchInventory(selectedWarehouse.id);
+    setSyncing(false);
+  };
+
+  // 初始化产品库存
+  const initProductInventory = async () => {
+    if (!window.confirm('确定要初始化产品库存吗？这会为该仓库添加所有产品的库存记录（初始数量为0）')) return;
+    
+    setSyncing(true);
+    let successCount = 0, skipCount = 0;
+    
+    for (const prod of products) {
+      const res = await request('/api/inventory', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'product',
+          itemId: prod.id,
+          warehouseId: selectedWarehouse.id,
+          quantity: 0,
+          safetyStock: 100
+        })
+      });
+      if (res.success) successCount++;
+      else skipCount++;
+    }
+    
+    alert(`产品库存初始化完成！\n新增: ${successCount} 条\n跳过（已存在）: ${skipCount} 条`);
+    fetchInventory(selectedWarehouse.id);
+    setSyncing(false);
+  };
+
   const filtered = warehouses.filter(w => 
     !keyword || w.name?.includes(keyword) || w.warehouseCode?.includes(keyword) || w.location?.includes(keyword)
   );
@@ -345,17 +355,19 @@ const WarehouseManagementPage = memo(() => {
     const currentInventory = inventoryTab === 'materials' ? materialInventory : productInventory;
     const lowStockCount = currentInventory.filter(i => i.quantity < i.safetyStock).length;
     
+    // 获取未添加的物料/产品列表（用于添加弹窗）
+    const existingMaterialIds = materialInventory.map(i => i.itemId);
+    const existingProductIds = productInventory.map(i => i.itemId);
+    const availableMaterials = materials.filter(m => !existingMaterialIds.includes(m.id));
+    const availableProducts = products.filter(p => !existingProductIds.includes(p.id));
+    
     return (
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
           <Button variant="secondary" icon={ArrowLeft} onClick={handleBackToList}>返回</Button>
           <div>
-            <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', margin: '0 0 4px 0' }}>
-              {selectedWarehouse.name} - 库存管理
-            </h1>
-            <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>
-              {selectedWarehouse.location} | 容量: {(selectedWarehouse.capacity || 0).toLocaleString()}
-            </p>
+            <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', margin: '0 0 4px 0' }}>{selectedWarehouse.name} - 库存管理</h1>
+            <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>{selectedWarehouse.location} | 容量: {(selectedWarehouse.capacity || 0).toLocaleString()}</p>
           </div>
         </div>
 
@@ -397,13 +409,20 @@ const WarehouseManagementPage = memo(() => {
               </button>
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
+              {/* ✨ 添加按钮 */}
+              {canEdit && (
+                <Button variant="success" icon={Plus} onClick={() => openAddInventory(inventoryTab === 'materials' ? 'material' : 'product')}>
+                  添加{inventoryTab === 'materials' ? '物料' : '产品'}
+                </Button>
+              )}
+              {/* 初始化按钮 */}
               {canEdit && inventoryTab === 'materials' && materialInventory.length === 0 && (
-                <Button variant="success" icon={Plus} onClick={initMaterialInventory} disabled={syncing}>
+                <Button variant="warning" icon={Plus} onClick={initMaterialInventory} disabled={syncing}>
                   {syncing ? '初始化中...' : '初始化物料库存'}
                 </Button>
               )}
               {canEdit && inventoryTab === 'products' && productInventory.length === 0 && (
-                <Button variant="success" icon={Plus} onClick={initProductInventory} disabled={syncing}>
+                <Button variant="warning" icon={Plus} onClick={initProductInventory} disabled={syncing}>
                   {syncing ? '初始化中...' : '初始化产品库存'}
                 </Button>
               )}
@@ -417,11 +436,7 @@ const WarehouseManagementPage = memo(() => {
           {inventoryLoading ? (
             <LoadingScreen />
           ) : currentInventory.length === 0 ? (
-            <EmptyState 
-              icon={inventoryTab === 'materials' ? Package : Box} 
-              title={`暂无${inventoryTab === 'materials' ? '物料' : '产品'}库存`} 
-              description="该仓库暂无库存记录" 
-            />
+            <EmptyState icon={inventoryTab === 'materials' ? Package : Box} title={`暂无${inventoryTab === 'materials' ? '物料' : '产品'}库存`} description="点击上方按钮添加或初始化库存" />
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -444,33 +459,24 @@ const WarehouseManagementPage = memo(() => {
                       <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9', background: isLow ? '#fef2f2' : 'transparent' }}>
                         <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{item.itemCode}</td>
                         <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{item.itemName}</td>
-                        <td style={{ padding: '16px', fontSize: '14px', fontWeight: 700, color: isLow ? '#ef4444' : '#0f172a', textAlign: 'right' }}>
-                          {(item.quantity || 0).toLocaleString()}
-                        </td>
-                        <td style={{ padding: '16px', fontSize: '14px', color: '#64748b', textAlign: 'right' }}>
-                          {(item.safetyStock || 0).toLocaleString()}
-                        </td>
+                        <td style={{ padding: '16px', fontSize: '14px', fontWeight: 700, color: isLow ? '#ef4444' : '#0f172a', textAlign: 'right' }}>{(item.quantity || 0).toLocaleString()}</td>
+                        <td style={{ padding: '16px', fontSize: '14px', color: '#64748b', textAlign: 'right' }}>{(item.safetyStock || 0).toLocaleString()}</td>
                         <td style={{ padding: '16px', fontSize: '14px', color: '#64748b', textAlign: 'center' }}>{item.unit}</td>
                         <td style={{ padding: '16px', textAlign: 'center' }}>
                           {isCritical ? (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, background: '#fee2e2', color: '#ef4444' }}>
-                              <AlertTriangle size={14} /> 严重不足
-                            </span>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, background: '#fee2e2', color: '#ef4444' }}><AlertTriangle size={14} /> 严重不足</span>
                           ) : isLow ? (
-                            <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, background: '#fef3c7', color: '#f59e0b' }}>
-                              库存不足
-                            </span>
+                            <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, background: '#fef3c7', color: '#f59e0b' }}>库存不足</span>
                           ) : (
-                            <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, background: '#d1fae5', color: '#10b981' }}>
-                              正常
-                            </span>
+                            <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 600, background: '#d1fae5', color: '#10b981' }}>正常</span>
                           )}
                         </td>
                         <td style={{ padding: '16px', textAlign: 'center' }}>
                           {canEdit && (
-                            <Button size="sm" variant="secondary" icon={Edit} onClick={() => openInventoryEdit(item)}>
-                              编辑
-                            </Button>
+                            <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+                              <Button size="sm" variant="secondary" icon={Edit} onClick={() => openInventoryEdit(item)}>编辑</Button>
+                              <Button size="sm" variant="danger" icon={Trash2} onClick={() => handleDeleteInventory(item)}>删除</Button>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -488,56 +494,46 @@ const WarehouseManagementPage = memo(() => {
             <>
               <div style={{ marginBottom: '20px', padding: '16px', background: '#f8fafc', borderRadius: '12px' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
-                  <div>
-                    <span style={{ color: '#64748b', fontWeight: 600 }}>编码：</span>
-                    <span style={{ color: '#0f172a', fontWeight: 700 }}>{editingInventory.itemCode}</span>
-                  </div>
-                  <div>
-                    <span style={{ color: '#64748b', fontWeight: 600 }}>名称：</span>
-                    <span style={{ color: '#0f172a', fontWeight: 700 }}>{editingInventory.itemName}</span>
-                  </div>
+                  <div><span style={{ color: '#64748b', fontWeight: 600 }}>编码：</span><span style={{ color: '#0f172a', fontWeight: 700 }}>{editingInventory.itemCode}</span></div>
+                  <div><span style={{ color: '#64748b', fontWeight: 600 }}>名称：</span><span style={{ color: '#0f172a', fontWeight: 700 }}>{editingInventory.itemName}</span></div>
                 </div>
               </div>
-
-              <Input 
-                label="当前库存数量" 
-                type="number" 
-                value={inventoryForm.quantity} 
-                onChange={v => setInventoryForm({ ...inventoryForm, quantity: v })} 
-                required 
-              />
-              <Input 
-                label="安全库存" 
-                type="number" 
-                value={inventoryForm.safetyStock} 
-                onChange={v => setInventoryForm({ ...inventoryForm, safetyStock: v })} 
-              />
-
-              {/* 库存变化提示 */}
-              {editingInventory.quantity !== parseFloat(inventoryForm.quantity) && (
-                <div style={{ 
-                  padding: '12px 16px', 
-                  background: parseFloat(inventoryForm.quantity) > editingInventory.quantity ? '#f0fdf4' : '#fef2f2', 
-                  borderRadius: '8px', 
-                  marginBottom: '16px',
-                  border: `1px solid ${parseFloat(inventoryForm.quantity) > editingInventory.quantity ? '#10b981' : '#ef4444'}`
-                }}>
-                  <div style={{ fontSize: '13px', color: '#64748b' }}>库存变化</div>
-                  <div style={{ fontSize: '16px', fontWeight: 700, color: parseFloat(inventoryForm.quantity) > editingInventory.quantity ? '#10b981' : '#ef4444' }}>
-                    {editingInventory.quantity} → {inventoryForm.quantity || 0}
-                    <span style={{ fontSize: '14px', marginLeft: '8px' }}>
-                      ({parseFloat(inventoryForm.quantity) > editingInventory.quantity ? '+' : ''}{(parseFloat(inventoryForm.quantity) || 0) - editingInventory.quantity})
-                    </span>
-                  </div>
-                </div>
-              )}
-
+              <Input label="当前库存数量" type="number" value={inventoryForm.quantity} onChange={v => setInventoryForm({ ...inventoryForm, quantity: v })} required />
+              <Input label="安全库存" type="number" value={inventoryForm.safetyStock} onChange={v => setInventoryForm({ ...inventoryForm, safetyStock: v })} />
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
                 <Button variant="secondary" onClick={() => setShowInventoryModal(false)}>取消</Button>
                 <Button icon={Save} onClick={handleSaveInventory}>保存</Button>
               </div>
             </>
           )}
+        </Modal>
+
+        {/* ✨ 添加库存弹窗 */}
+        <Modal isOpen={showAddInventoryModal} onClose={() => setShowAddInventoryModal(false)} title={`添加${addInventoryType === 'material' ? '物料' : '产品'}库存`} width="500px">
+          <Select 
+            label={addInventoryType === 'material' ? '选择物料' : '选择产品'} 
+            value={addInventoryForm.itemId} 
+            onChange={v => setAddInventoryForm({ ...addInventoryForm, itemId: v })} 
+            required
+            options={
+              addInventoryType === 'material' 
+                ? availableMaterials.map(m => ({ value: m.id, label: `${m.materialCode || m.material_code} - ${m.name}` }))
+                : availableProducts.map(p => ({ value: p.id, label: `${p.productCode || p.product_code} - ${p.name}` }))
+            }
+          />
+          <Input label="初始库存数量" type="number" value={addInventoryForm.quantity} onChange={v => setAddInventoryForm({ ...addInventoryForm, quantity: v })} />
+          <Input label="安全库存" type="number" value={addInventoryForm.safetyStock} onChange={v => setAddInventoryForm({ ...addInventoryForm, safetyStock: v })} />
+          
+          {((addInventoryType === 'material' && availableMaterials.length === 0) || (addInventoryType === 'product' && availableProducts.length === 0)) && (
+            <div style={{ padding: '16px', background: '#fef3c7', borderRadius: '8px', marginBottom: '16px', color: '#92400e', fontSize: '13px' }}>
+              所有{addInventoryType === 'material' ? '物料' : '产品'}都已添加到该仓库
+            </div>
+          )}
+          
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+            <Button variant="secondary" onClick={() => setShowAddInventoryModal(false)}>取消</Button>
+            <Button icon={Save} onClick={handleAddInventory} disabled={!addInventoryForm.itemId}>添加</Button>
+          </div>
         </Modal>
       </div>
     );
@@ -583,21 +579,13 @@ const WarehouseManagementPage = memo(() => {
               </thead>
               <tbody>
                 {filtered.map(warehouse => (
-                  <tr key={warehouse.id} style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }} 
-                      onClick={() => handleWarehouseClick(warehouse)}>
-                    <td style={{ padding: '16px', fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
-                      {warehouse.warehouseCode || warehouse.warehouse_code}
-                    </td>
+                  <tr key={warehouse.id} style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }} onClick={() => handleWarehouseClick(warehouse)}>
+                    <td style={{ padding: '16px', fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>{warehouse.warehouseCode || warehouse.warehouse_code}</td>
                     <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Warehouse size={18} style={{ color: '#3b82f6' }} />
-                        {warehouse.name}
-                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Warehouse size={18} style={{ color: '#3b82f6' }} />{warehouse.name}</div>
                     </td>
                     <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{warehouse.location}</td>
-                    <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#0f172a', textAlign: 'right' }}>
-                      {(warehouse.capacity || 0).toLocaleString()}
-                    </td>
+                    <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#0f172a', textAlign: 'right' }}>{(warehouse.capacity || 0).toLocaleString()}</td>
                     <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{warehouse.manager || '-'}</td>
                     <td style={{ padding: '16px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>

@@ -1,4 +1,4 @@
-// src/pages/ProductManagementPage.jsx - 完整版（CRUD + BOM编辑 + 库存分配）
+// src/pages/ProductManagementPage.jsx - 修复版（BOM显示+库存API修复）
 import React, { memo, useState, useCallback, useEffect } from 'react';
 import { Package, Plus, Search, RefreshCw, Edit, Trash2, Save, X, Box, Settings, Warehouse, AlertTriangle, CheckCircle } from 'lucide-react';
 import { useApi } from '../hooks/useApi';
@@ -109,8 +109,8 @@ const ProductManagementPage = memo(() => {
   const [bomProduct, setBomProduct] = useState(null);
   const [bomItems, setBomItems] = useState([]);
   const [bomLoading, setBomLoading] = useState(false);
-  
-  // ✨ 库存分配弹窗
+
+  // 库存分配弹窗
   const [showInventoryModal, setShowInventoryModal] = useState(false);
   const [inventoryProduct, setInventoryProduct] = useState(null);
   const [productInventories, setProductInventories] = useState([]);
@@ -129,25 +129,19 @@ const ProductManagementPage = memo(() => {
     setLoading(false);
   }, [request, page, keyword]);
 
-  // 获取物料列表（用于BOM选择）
+  // 获取物料和仓库列表
   const fetchMaterials = useCallback(async () => {
     const res = await request('/api/materials');
-    if (res.success) {
-      setMaterials(res.data?.list || res.data || []);
-    }
+    if (res.success) setMaterials(res.data?.list || res.data || []);
   }, [request]);
-  
-  // 获取仓库列表（用于库存分配）
+
   const fetchWarehouses = useCallback(async () => {
     const res = await request('/api/warehouses');
-    if (res.success) {
-      setWarehouses(res.data?.list || res.data || []);
-    }
+    if (res.success) setWarehouses(res.data?.list || res.data || []);
   }, [request]);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
-  useEffect(() => { fetchMaterials(); }, [fetchMaterials]);
-  useEffect(() => { fetchWarehouses(); }, [fetchWarehouses]);
+  useEffect(() => { fetchMaterials(); fetchWarehouses(); }, [fetchMaterials, fetchWarehouses]);
 
   // 打开产品编辑弹窗
   const openProductModal = (product = null) => {
@@ -199,15 +193,12 @@ const ProductManagementPage = memo(() => {
     }
   };
 
-  // ============ BOM 编辑功能 ============
-  
-  // 打开BOM编辑弹窗
+  // ============ BOM编辑功能 ============
   const openBomModal = async (product) => {
     setBomProduct(product);
     setBomLoading(true);
     setShowBomModal(true);
     
-    // 获取产品详情（包含BOM）
     const res = await request(`/api/products/${product.id}`);
     if (res.success && res.data) {
       const items = res.data.bomItems || [];
@@ -223,17 +214,13 @@ const ProductManagementPage = memo(() => {
     setBomLoading(false);
   };
 
-  // 添加BOM物料
   const addBomItem = () => {
     setBomItems([...bomItems, { materialId: '', materialCode: '', materialName: '', quantity: 1 }]);
   };
 
-  // 更新BOM物料
   const updateBomItem = (index, field, value) => {
     const newItems = [...bomItems];
     newItems[index][field] = value;
-    
-    // 如果选择了物料，自动填充名称
     if (field === 'materialId') {
       const material = materials.find(m => m.id == value);
       if (material) {
@@ -241,16 +228,13 @@ const ProductManagementPage = memo(() => {
         newItems[index].materialName = material.name;
       }
     }
-    
     setBomItems(newItems);
   };
 
-  // 删除BOM物料
   const removeBomItem = (index) => {
     setBomItems(bomItems.filter((_, i) => i !== index));
   };
 
-  // 保存BOM
   const handleSaveBom = async () => {
     const validItems = bomItems.filter(item => item.materialId);
     
@@ -273,7 +257,7 @@ const ProductManagementPage = memo(() => {
     }
   };
 
-  // ============ ✨ 库存分配功能 ============
+  // ============ 库存分配功能（修复版）============
   
   // 打开库存分配弹窗
   const openInventoryModal = async (product) => {
@@ -282,48 +266,46 @@ const ProductManagementPage = memo(() => {
     setShowInventoryModal(true);
     setEditingInventory(null);
     
-    console.log('📦 查看产品库存:', product.name);
+    // 遍历所有仓库获取该产品的库存
+    const inventoryList = [];
     
-    // 获取该产品在所有仓库的库存
-    const res = await request(`/api/product-inventory?productId=${product.id}`);
-    
-    if (res.success) {
-      const inventories = res.data?.list || res.data || [];
-      
-      console.log('📊 产品库存数据:', inventories);
-      
-      // 创建完整的仓库库存列表
-      const fullInventories = warehouses.map(wh => {
-        const existing = inventories.find(inv => 
-          (inv.warehouseId || inv.warehouse_id) == wh.id
-        );
-        
-        return existing ? {
-          id: existing.id,
-          warehouseId: wh.id,
-          warehouseName: wh.name,
-          warehouseCode: wh.warehouseCode || wh.warehouse_code,
-          quantity: existing.quantity || 0,
-          safetyStock: existing.safetyStock || existing.safety_stock || 100,
-          hasInventory: true
-        } : {
-          id: null,
-          warehouseId: wh.id,
-          warehouseName: wh.name,
-          warehouseCode: wh.warehouseCode || wh.warehouse_code,
-          quantity: 0,
-          safetyStock: 100,
-          hasInventory: false
-        };
-      });
-      
-      console.log('✅ 完整库存列表:', fullInventories);
-      setProductInventories(fullInventories);
-    } else {
-      console.error('❌ 获取库存失败:', res);
-      setProductInventories([]);
+    for (const wh of warehouses) {
+      try {
+        const res = await request(`/api/inventory?warehouseId=${wh.id}&type=product`);
+        if (res.success) {
+          const list = res.data?.list || res.data || [];
+          const productInv = list.find(inv => 
+            (inv.productId || inv.product_id) == product.id
+          );
+          
+          if (productInv) {
+            inventoryList.push({
+              id: productInv.id,
+              warehouseId: wh.id,
+              warehouseName: wh.name,
+              warehouseCode: wh.warehouseCode || wh.warehouse_code,
+              quantity: productInv.quantity || 0,
+              safetyStock: productInv.safetyStock || productInv.safety_stock || 100,
+              hasInventory: true
+            });
+          } else {
+            inventoryList.push({
+              id: null,
+              warehouseId: wh.id,
+              warehouseName: wh.name,
+              warehouseCode: wh.warehouseCode || wh.warehouse_code,
+              quantity: 0,
+              safetyStock: 100,
+              hasInventory: false
+            });
+          }
+        }
+      } catch (e) {
+        console.error('获取仓库库存失败:', wh.name, e);
+      }
     }
     
+    setProductInventories(inventoryList);
     setInventoryLoading(false);
   };
 
@@ -340,83 +322,64 @@ const ProductManagementPage = memo(() => {
   const handleSaveInventory = async () => {
     if (!editingInventory) return;
     
-    const inventoryData = {
-      productId: inventoryProduct.id,
-      product_id: inventoryProduct.id,
-      warehouseId: editingInventory.warehouseId,
-      warehouse_id: editingInventory.warehouseId,
-      quantity: parseFloat(inventoryFormData.quantity) || 0,
-      safetyStock: parseInt(inventoryFormData.safetyStock) || 100,
-      safety_stock: parseInt(inventoryFormData.safetyStock) || 100
-    };
-    
-    console.log('💾 保存产品库存:', inventoryData);
-    
-    let res;
-    if (editingInventory.hasInventory && editingInventory.id) {
-      // 更新现有库存
-      res = await request(`/api/product-inventory/${editingInventory.id}`, {
+    if (editingInventory.hasInventory) {
+      const res = await request(`/api/inventory/${editingInventory.id}`, {
         method: 'PUT',
-        body: JSON.stringify(inventoryData)
+        body: JSON.stringify({
+          quantity: parseFloat(inventoryFormData.quantity) || 0,
+          safetyStock: parseInt(inventoryFormData.safetyStock) || 100,
+          type: 'product'
+        })
       });
+      
+      if (res.success) {
+        alert('库存更新成功！');
+        openInventoryModal(inventoryProduct);
+      } else {
+        alert(res.message || '更新失败');
+      }
     } else {
-      // 创建新库存
-      res = await request('/api/product-inventory', {
+      const res = await request('/api/inventory', {
         method: 'POST',
-        body: JSON.stringify(inventoryData)
+        body: JSON.stringify({
+          type: 'product',
+          itemId: inventoryProduct.id,
+          warehouseId: editingInventory.warehouseId,
+          quantity: parseFloat(inventoryFormData.quantity) || 0,
+          safetyStock: parseInt(inventoryFormData.safetyStock) || 100
+        })
       });
+      
+      if (res.success) {
+        alert('库存添加成功！');
+        openInventoryModal(inventoryProduct);
+      } else {
+        alert(res.message || '添加失败');
+      }
     }
     
-    console.log('📥 保存响应:', res);
-    
-    if (res.success) {
-      setEditingInventory(null);
-      openInventoryModal(inventoryProduct);
-      alert('库存保存成功！');
-    } else {
-      alert(res.message || '保存失败');
-    }
+    setEditingInventory(null);
   };
 
-  // 添加到新仓库
-  const handleAddToWarehouse = async (warehouseId) => {
-    const inventoryData = {
-      productId: inventoryProduct.id,
-      product_id: inventoryProduct.id,
-      warehouseId: warehouseId,
-      warehouse_id: warehouseId,
-      quantity: 0,
-      safetyStock: 100,
-      safety_stock: 100
-    };
+  // 删除库存
+  const handleDeleteInventory = async (inventory) => {
+    if (!inventory.hasInventory) return;
+    if (!window.confirm(`确定要删除该产品在"${inventory.warehouseName}"的库存记录吗？`)) return;
     
-    const res = await request('/api/product-inventory', {
-      method: 'POST',
-      body: JSON.stringify(inventoryData)
-    });
-    
+    const res = await request(`/api/inventory/${inventory.id}?type=product`, { method: 'DELETE' });
     if (res.success) {
+      alert('库存删除成功！');
       openInventoryModal(inventoryProduct);
-      alert('添加成功！可以编辑数量了');
     } else {
-      alert(res.message || '添加失败');
+      alert(res.message || '删除失败');
     }
-  };
-
-  // 计算库存预警状态
-  const getInventoryStatus = (quantity, safetyStock) => {
-    const ratio = quantity / (safetyStock || 1);
-    if (ratio >= 1) return { color: '#10b981', bgColor: '#dcfce7', text: '正常', icon: CheckCircle };
-    if (ratio >= 0.5) return { color: '#f59e0b', bgColor: '#fef3c7', text: '库存不足', icon: AlertTriangle };
-    return { color: '#ef4444', bgColor: '#fee2e2', text: '严重不足', icon: AlertTriangle };
   };
 
   if (loading) return <LoadingScreen />;
 
   return (
     <div>
-      {/* 页面标题 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0' }}>产品管理</h1>
           <p style={{ fontSize: '15px', color: '#64748b', margin: 0 }}>管理产品、BOM和库存分配</p>
@@ -424,24 +387,18 @@ const ProductManagementPage = memo(() => {
         {isAdmin && <Button icon={Plus} onClick={() => openProductModal()}>新增产品</Button>}
       </div>
 
-      {/* 搜索栏 */}
       <Card style={{ marginBottom: '16px' }}>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <div style={{ flex: 1, position: 'relative' }}>
             <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-            <input
-              type="text"
-              placeholder="搜索产品编码或名称..."
-              value={keyword}
-              onChange={e => setKeyword(e.target.value)}
-              style={{ width: '100%', padding: '12px 14px 12px 42px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', boxSizing: 'border-box' }}
-            />
+            <input type="text" placeholder="搜索产品编码或名称..." value={keyword} 
+              onChange={(e) => { setKeyword(e.target.value); setPage(1); }} 
+              style={{ width: '100%', padding: '12px 14px 12px 42px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', boxSizing: 'border-box' }} />
           </div>
           <Button variant="secondary" icon={RefreshCw} onClick={fetchProducts}>刷新</Button>
         </div>
       </Card>
 
-      {/* 产品列表 */}
       <Card>
         {products.length === 0 ? (
           <EmptyState icon={Package} title="暂无产品" description="点击新增产品按钮添加" />
@@ -461,7 +418,8 @@ const ProductManagementPage = memo(() => {
                 </thead>
                 <tbody>
                   {products.map(product => {
-                    const bomCount = product.bomCount || product.bom_count || 0;
+                    // ✅ 修复：使用正确的字段名 materialCount
+                    const bomCount = product.materialCount || product.material_count || 0;
                     
                     return (
                       <tr key={product.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
@@ -496,14 +454,8 @@ const ProductManagementPage = memo(() => {
                         </td>
                         <td style={{ padding: '16px', textAlign: 'center' }}>
                           <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                            {/* BOM按钮 */}
-                            <Button size="sm" variant="warning" icon={Box} onClick={() => openBomModal(product)}>
-                              BOM
-                            </Button>
-                            {/* ✨ 库存按钮 */}
-                            <Button size="sm" variant="info" icon={Warehouse} onClick={() => openInventoryModal(product)}>
-                              库存
-                            </Button>
+                            <Button size="sm" variant="warning" icon={Box} onClick={() => openBomModal(product)}>BOM</Button>
+                            <Button size="sm" variant="info" icon={Warehouse} onClick={() => openInventoryModal(product)}>库存</Button>
                             {isAdmin && (
                               <>
                                 <Button size="sm" variant="secondary" icon={Edit} onClick={() => openProductModal(product)}>编辑</Button>
@@ -519,7 +471,6 @@ const ProductManagementPage = memo(() => {
               </table>
             </div>
 
-            {/* 分页 */}
             <div style={{ padding: '16px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '13px', color: '#64748b' }}>共 {total} 条记录</span>
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -541,20 +492,11 @@ const ProductManagementPage = memo(() => {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <Input label="类别" value={formData.category} onChange={v => setFormData({ ...formData, category: v })} placeholder="如: 家具" />
           <Select label="单位" value={formData.unit} onChange={v => setFormData({ ...formData, unit: v })} 
-            options={[
-              { value: 'PCS', label: '件' },
-              { value: 'SET', label: '套' },
-              { value: 'BOX', label: '箱' },
-              { value: 'KG', label: '千克' }
-            ]} />
+            options={[{ value: 'PCS', label: '件' }, { value: 'SET', label: '套' }, { value: 'BOX', label: '箱' }, { value: 'KG', label: '千克' }]} />
         </div>
         <Input label="描述" value={formData.description} onChange={v => setFormData({ ...formData, description: v })} placeholder="产品描述..." />
         <Select label="状态" value={formData.status} onChange={v => setFormData({ ...formData, status: v })} 
-          options={[
-            { value: 'active', label: '启用' },
-            { value: 'inactive', label: '停用' }
-          ]} />
-        
+          options={[{ value: 'active', label: '启用' }, { value: 'inactive', label: '停用' }]} />
         <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'flex-end' }}>
           <Button variant="secondary" onClick={() => setShowModal(false)}>取消</Button>
           <Button icon={Save} onClick={handleSaveProduct}>保存</Button>
@@ -567,25 +509,15 @@ const ProductManagementPage = memo(() => {
           <div style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>加载中...</div>
         ) : (
           <>
-            {/* 产品信息 */}
             <div style={{ marginBottom: '20px', padding: '16px', background: '#f8fafc', borderRadius: '12px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
-                <div>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>产品编码：</span>
-                  <span style={{ color: '#0f172a', fontWeight: 700 }}>{bomProduct?.productCode || bomProduct?.product_code}</span>
-                </div>
-                <div>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>产品名称：</span>
-                  <span style={{ color: '#0f172a', fontWeight: 700 }}>{bomProduct?.name}</span>
-                </div>
+                <div><span style={{ color: '#64748b', fontWeight: 600 }}>产品编码：</span><span style={{ color: '#0f172a', fontWeight: 700 }}>{bomProduct?.productCode || bomProduct?.product_code}</span></div>
+                <div><span style={{ color: '#64748b', fontWeight: 600 }}>产品名称：</span><span style={{ color: '#0f172a', fontWeight: 700 }}>{bomProduct?.name}</span></div>
               </div>
             </div>
 
-            {/* BOM物料列表 */}
             <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>
-                BOM物料清单 {bomItems.length > 0 && `(${bomItems.length} 项)`}
-              </h4>
+              <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>BOM物料清单 {bomItems.length > 0 && `(${bomItems.length} 项)`}</h4>
               <Button size="sm" variant="secondary" icon={Plus} onClick={addBomItem}>添加物料</Button>
             </div>
 
@@ -597,36 +529,19 @@ const ProductManagementPage = memo(() => {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '300px', overflowY: 'auto' }}>
                 {bomItems.map((item, idx) => (
-                  <div key={idx} style={{ 
-                    display: 'flex', gap: '12px', alignItems: 'center', 
-                    padding: '12px', background: '#f8fafc', borderRadius: '8px',
-                    border: '1px solid #e2e8f0'
-                  }}>
+                  <div key={idx} style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '12px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                     <div style={{ flex: 3 }}>
                       <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748b', marginBottom: '4px' }}>物料 #{idx + 1}</label>
-                      <select 
-                        value={item.materialId} 
-                        onChange={e => updateBomItem(idx, 'materialId', e.target.value)}
-                        style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}
-                      >
+                      <select value={item.materialId} onChange={e => updateBomItem(idx, 'materialId', e.target.value)}
+                        style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none' }}>
                         <option value="">选择物料...</option>
-                        {materials.map(m => (
-                          <option key={m.id} value={m.id}>
-                            {m.materialCode || m.material_code} - {m.name}
-                          </option>
-                        ))}
+                        {materials.map(m => (<option key={m.id} value={m.id}>{m.materialCode || m.material_code} - {m.name}</option>))}
                       </select>
                     </div>
                     <div style={{ flex: 1 }}>
                       <label style={{ display: 'block', fontSize: '11px', fontWeight: 600, color: '#64748b', marginBottom: '4px' }}>数量</label>
-                      <input 
-                        type="number" 
-                        value={item.quantity} 
-                        onChange={e => updateBomItem(idx, 'quantity', e.target.value)}
-                        min="0.01"
-                        step="0.01"
-                        style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', boxSizing: 'border-box' }}
-                      />
+                      <input type="number" value={item.quantity} onChange={e => updateBomItem(idx, 'quantity', e.target.value)} min="0.01" step="0.01"
+                        style={{ width: '100%', padding: '10px 12px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '8px', outline: 'none', boxSizing: 'border-box' }} />
                     </div>
                     <Button size="sm" variant="danger" icon={Trash2} onClick={() => removeBomItem(idx)} style={{ marginTop: '18px' }} />
                   </div>
@@ -634,7 +549,6 @@ const ProductManagementPage = memo(() => {
               </div>
             )}
 
-            {/* 汇总信息 */}
             {bomItems.length > 0 && (
               <div style={{ marginTop: '16px', padding: '12px 16px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #10b981' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -652,197 +566,101 @@ const ProductManagementPage = memo(() => {
         )}
       </Modal>
 
-      {/* ✨ 库存分配弹窗 */}
-      <Modal isOpen={showInventoryModal} onClose={() => {
-        setShowInventoryModal(false);
-        setEditingInventory(null);
-      }} 
-        title={`产品库存分配 - ${inventoryProduct?.name || ''}`} width="750px">
+      {/* 库存分配弹窗 */}
+      <Modal isOpen={showInventoryModal} onClose={() => { setShowInventoryModal(false); setEditingInventory(null); }} title={`库存分配 - ${inventoryProduct?.name || ''}`} width="650px">
         {inventoryLoading ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>加载库存数据...</div>
+          <div style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>加载中...</div>
         ) : (
           <>
-            {/* 产品信息 */}
-            <div style={{ marginBottom: '20px', padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', fontSize: '13px' }}>
-                <div>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>产品编码：</span>
-                  <span style={{ color: '#0f172a', fontWeight: 700 }}>{inventoryProduct?.productCode || inventoryProduct?.product_code}</span>
-                </div>
-                <div>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>类别：</span>
-                  <span style={{ color: '#0f172a', fontWeight: 700 }}>{inventoryProduct?.category || '-'}</span>
-                </div>
-                <div>
-                  <span style={{ color: '#64748b', fontWeight: 600 }}>单位：</span>
-                  <span style={{ color: '#0f172a', fontWeight: 700 }}>{inventoryProduct?.unit}</span>
-                </div>
+            <div style={{ marginBottom: '20px', padding: '16px', background: '#f8fafc', borderRadius: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
+                <div><span style={{ color: '#64748b', fontWeight: 600 }}>产品编码：</span><span style={{ color: '#0f172a', fontWeight: 700 }}>{inventoryProduct?.productCode || inventoryProduct?.product_code}</span></div>
+                <div><span style={{ color: '#64748b', fontWeight: 600 }}>产品名称：</span><span style={{ color: '#0f172a', fontWeight: 700 }}>{inventoryProduct?.name}</span></div>
               </div>
             </div>
 
-            {/* 库存总览 */}
-            <div style={{ marginBottom: '20px', padding: '16px', background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)', borderRadius: '12px', border: '2px solid #10b981' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-around', gap: '16px' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '12px', color: '#064e3b', fontWeight: 600, marginBottom: '4px' }}>总库存</div>
-                  <div style={{ fontSize: '28px', fontWeight: 800, color: '#10b981' }}>
-                    {productInventories.reduce((sum, inv) => sum + (inv.quantity || 0), 0).toFixed(0)}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#064e3b', marginTop: '2px' }}>{inventoryProduct?.unit}</div>
-                </div>
-                <div style={{ width: '1px', background: '#10b981', opacity: 0.2 }} />
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '12px', color: '#064e3b', fontWeight: 600, marginBottom: '4px' }}>已配置仓库</div>
-                  <div style={{ fontSize: '28px', fontWeight: 800, color: '#10b981' }}>
-                    {productInventories.filter(inv => inv.hasInventory).length}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#064e3b', marginTop: '2px' }}>/ {warehouses.length} 个</div>
-                </div>
-                <div style={{ width: '1px', background: '#10b981', opacity: 0.2 }} />
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '12px', color: '#064e3b', fontWeight: 600, marginBottom: '4px' }}>总安全库存</div>
-                  <div style={{ fontSize: '28px', fontWeight: 800, color: '#10b981' }}>
-                    {productInventories.reduce((sum, inv) => sum + (inv.safetyStock || 0), 0)}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#064e3b', marginTop: '2px' }}>{inventoryProduct?.unit}</div>
-                </div>
+            <div style={{ marginBottom: '20px', padding: '16px', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '12px', color: '#fff' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', textAlign: 'center' }}>
+                <div><div style={{ fontSize: '12px', opacity: 0.9 }}>总库存</div><div style={{ fontSize: '24px', fontWeight: 800 }}>{productInventories.reduce((sum, inv) => sum + (inv.quantity || 0), 0)}</div></div>
+                <div><div style={{ fontSize: '12px', opacity: 0.9 }}>已配置仓库</div><div style={{ fontSize: '24px', fontWeight: 800 }}>{productInventories.filter(inv => inv.hasInventory).length}/{warehouses.length}</div></div>
+                <div><div style={{ fontSize: '12px', opacity: 0.9 }}>总安全库存</div><div style={{ fontSize: '24px', fontWeight: 800 }}>{productInventories.filter(inv => inv.hasInventory).reduce((sum, inv) => sum + (inv.safetyStock || 0), 0)}</div></div>
               </div>
             </div>
 
-            {/* 仓库库存列表 */}
             <div style={{ marginBottom: '16px' }}>
-              <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a', marginBottom: '12px' }}>仓库库存分配</h4>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '400px', overflowY: 'auto' }}>
-              {productInventories.map((inventory, idx) => {
-                const status = inventory.hasInventory ? getInventoryStatus(inventory.quantity, inventory.safetyStock) : null;
-                const StatusIcon = status?.icon;
-                const isEditing = editingInventory?.warehouseId === inventory.warehouseId;
-                
-                return (
-                  <div key={idx} style={{
-                    padding: '16px',
-                    background: inventory.hasInventory ? 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)' : '#fafafa',
-                    borderRadius: '12px',
-                    border: inventory.hasInventory ? '1px solid #e2e8f0' : '1px dashed #d1d5db'
-                  }}>
-                    {/* 仓库标题行 */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: inventory.hasInventory ? '12px' : 0 }}>
-                      <div>
-                        <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
-                          🏢 {inventory.warehouseCode} - {inventory.warehouseName}
-                        </div>
-                        {!inventory.hasInventory && (
-                          <div style={{ fontSize: '12px', color: '#94a3b8' }}>未设置库存</div>
-                        )}
-                      </div>
-                      
-                      {inventory.hasInventory ? (
-                        isEditing ? (
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <Button size="sm" variant="secondary" onClick={() => setEditingInventory(null)}>取消</Button>
-                            <Button size="sm" variant="success" icon={Save} onClick={handleSaveInventory}>保存</Button>
+              <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>各仓库库存</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '300px', overflowY: 'auto' }}>
+                {productInventories.map((inv, idx) => {
+                  const isLow = inv.hasInventory && inv.quantity < inv.safetyStock;
+                  const isCritical = inv.hasInventory && inv.quantity < inv.safetyStock * 0.5;
+                  const isEditing = editingInventory?.warehouseId === inv.warehouseId;
+                  
+                  return (
+                    <div key={idx} style={{ padding: '16px', background: isEditing ? '#eff6ff' : (inv.hasInventory ? '#fff' : '#f8fafc'), borderRadius: '12px', border: isEditing ? '2px solid #3b82f6' : '1px solid #e2e8f0' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                            <Warehouse size={18} style={{ color: '#3b82f6' }} />
+                            <span style={{ fontWeight: 700, color: '#0f172a' }}>{inv.warehouseCode}</span>
+                            <span style={{ color: '#64748b' }}>- {inv.warehouseName}</span>
                           </div>
-                        ) : (
-                          <Button size="sm" variant="secondary" icon={Edit} onClick={() => editWarehouseInventory(inventory)}>
-                            编辑
-                          </Button>
-                        )
-                      ) : (
-                        <Button size="sm" variant="success" icon={Plus} onClick={() => handleAddToWarehouse(inventory.warehouseId)}>
-                          添加到此仓库
-                        </Button>
-                      )}
-                    </div>
-
-                    {/* 库存详情 */}
-                    {inventory.hasInventory && (
-                      isEditing ? (
-                        // 编辑模式
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', paddingTop: '12px', borderTop: '1px solid #e2e8f0' }}>
-                          <div>
-                            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '6px' }}>
-                              当前库存 ({inventoryProduct?.unit})
-                            </label>
-                            <input
-                              type="number"
-                              value={inventoryFormData.quantity}
-                              onChange={e => setInventoryFormData({ ...inventoryFormData, quantity: parseFloat(e.target.value) || 0 })}
-                              step="1"
-                              style={{ width: '100%', padding: '10px 12px', fontSize: '14px', border: '2px solid #3b82f6', borderRadius: '8px', outline: 'none', boxSizing: 'border-box', fontWeight: 600 }}
-                            />
-                          </div>
-                          <div>
-                            <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '6px' }}>
-                              安全库存 ({inventoryProduct?.unit})
-                            </label>
-                            <input
-                              type="number"
-                              value={inventoryFormData.safetyStock}
-                              onChange={e => setInventoryFormData({ ...inventoryFormData, safetyStock: parseInt(e.target.value) || 100 })}
-                              style={{ width: '100%', padding: '10px 12px', fontSize: '14px', border: '2px solid #3b82f6', borderRadius: '8px', outline: 'none', boxSizing: 'border-box', fontWeight: 600 }}
-                            />
-                          </div>
-                          {/* 变化提示 */}
-                          {(inventoryFormData.quantity !== inventory.quantity || inventoryFormData.safetyStock !== inventory.safetyStock) && (
-                            <div style={{ gridColumn: '1 / -1', padding: '10px 14px', background: '#eff6ff', borderRadius: '8px', border: '1px solid #3b82f6' }}>
-                              <div style={{ fontSize: '12px', color: '#1e40af', fontWeight: 600 }}>📊 变化预览：</div>
-                              {inventoryFormData.quantity !== inventory.quantity && (
-                                <div style={{ fontSize: '12px', color: '#1e40af', marginTop: '4px' }}>
-                                  数量: {inventory.quantity} → {inventoryFormData.quantity} 
-                                  <span style={{ fontWeight: 700, marginLeft: '8px' }}>
-                                    ({inventoryFormData.quantity > inventory.quantity ? '+' : ''}{inventoryFormData.quantity - inventory.quantity})
-                                  </span>
-                                </div>
-                              )}
-                              {inventoryFormData.safetyStock !== inventory.safetyStock && (
-                                <div style={{ fontSize: '12px', color: '#1e40af', marginTop: '4px' }}>
-                                  安全库存: {inventory.safetyStock} → {inventoryFormData.safetyStock}
-                                </div>
-                              )}
+                          
+                          {isEditing ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
+                              <div>
+                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '4px' }}>当前库存</label>
+                                <input type="number" value={inventoryFormData.quantity} onChange={e => setInventoryFormData({...inventoryFormData, quantity: e.target.value})}
+                                  style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
+                              </div>
+                              <div>
+                                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '4px' }}>安全库存</label>
+                                <input type="number" value={inventoryFormData.safetyStock} onChange={e => setInventoryFormData({...inventoryFormData, safetyStock: e.target.value})}
+                                  style={{ width: '100%', padding: '10px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }} />
+                              </div>
                             </div>
+                          ) : inv.hasInventory ? (
+                            <div style={{ display: 'flex', gap: '24px', fontSize: '13px' }}>
+                              <div><span style={{ color: '#64748b' }}>库存：</span><span style={{ fontWeight: 700, color: isLow ? '#ef4444' : '#0f172a' }}>{inv.quantity}</span></div>
+                              <div><span style={{ color: '#64748b' }}>安全库存：</span><span style={{ fontWeight: 600 }}>{inv.safetyStock}</span></div>
+                              <div>
+                                {isCritical ? (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', background: '#fee2e2', color: '#ef4444', borderRadius: '4px', fontSize: '12px', fontWeight: 600 }}><AlertTriangle size={12} /> 严重不足</span>
+                                ) : isLow ? (
+                                  <span style={{ padding: '2px 8px', background: '#fef3c7', color: '#f59e0b', borderRadius: '4px', fontSize: '12px', fontWeight: 600 }}>库存不足</span>
+                                ) : (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 8px', background: '#d1fae5', color: '#10b981', borderRadius: '4px', fontSize: '12px', fontWeight: 600 }}><CheckCircle size={12} /> 正常</span>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: '13px', color: '#94a3b8' }}>未设置库存</div>
                           )}
                         </div>
-                      ) : (
-                        // 查看模式
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', paddingTop: '12px', borderTop: '1px solid #e2e8f0' }}>
-                          <div>
-                            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '6px' }}>当前库存</div>
-                            <div style={{ fontSize: '20px', fontWeight: 700, color: '#0f172a' }}>
-                              {inventory.quantity || 0}
-                              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, marginLeft: '6px' }}>{inventoryProduct?.unit}</span>
-                            </div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '6px' }}>安全库存</div>
-                            <div style={{ fontSize: '20px', fontWeight: 700, color: '#3b82f6' }}>
-                              {inventory.safetyStock || 100}
-                              <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, marginLeft: '6px' }}>{inventoryProduct?.unit}</span>
-                            </div>
-                          </div>
-                          <div>
-                            <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '6px' }}>库存状态</div>
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: status.bgColor, borderRadius: '8px' }}>
-                              <StatusIcon size={14} style={{ color: status.color }} />
-                              <span style={{ fontSize: '12px', fontWeight: 700, color: status.color }}>{status.text}</span>
-                            </div>
-                          </div>
+                        
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          {isEditing ? (
+                            <>
+                              <Button size="sm" variant="success" icon={Save} onClick={handleSaveInventory}>保存</Button>
+                              <Button size="sm" variant="secondary" onClick={() => setEditingInventory(null)}>取消</Button>
+                            </>
+                          ) : inv.hasInventory ? (
+                            <>
+                              <Button size="sm" variant="secondary" icon={Edit} onClick={() => editWarehouseInventory(inv)}>编辑</Button>
+                              <Button size="sm" variant="danger" icon={Trash2} onClick={() => handleDeleteInventory(inv)}>删除</Button>
+                            </>
+                          ) : (
+                            <Button size="sm" variant="success" icon={Plus} onClick={() => editWarehouseInventory(inv)}>添加</Button>
+                          )}
                         </div>
-                      )
-                    )}
-                  </div>
-                );
-              })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
-            <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end' }}>
-              <Button variant="secondary" onClick={() => {
-                setShowInventoryModal(false);
-                setEditingInventory(null);
-              }}>
-                关闭
-              </Button>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <Button variant="secondary" onClick={() => { setShowInventoryModal(false); setEditingInventory(null); }}>关闭</Button>
             </div>
           </>
         )}
