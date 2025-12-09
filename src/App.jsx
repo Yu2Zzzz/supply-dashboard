@@ -744,17 +744,12 @@ const ProductDetailPage = memo(({ code, data, onNav, onBack }) => {
 // ============ 物料详情页 ============
 const MaterialDetailPage = memo(({ code, data, onBack }) => {
   const { mats = [], suppliers = [] } = data;
+  const mat = mats.find(m => m.code === code);
   const { token } = useAuth();
 
   const [poList, setPoList] = useState([]);
   const [poLoading, setPoLoading] = useState(false);
   const [poError, setPoError] = useState('');
-
-  // 当前物料
-  const mat = useMemo(
-    () => mats.find(m => m.code === code),
-    [mats, code]
-  );
 
   // 从后端正式采购接口拉采购单，不再用 /api/data 里的 pos
   useEffect(() => {
@@ -770,13 +765,16 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
           pageSize: '200',
         });
 
-        const res = await fetch(`${BASE_URL}/api/purchase-orders?${params.toString()}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        });
+        const res = await fetch(
+          `${BASE_URL}/api/purchase-orders?${params.toString()}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+          }
+        );
 
         const json = await res.json();
         if (!json.success) {
@@ -797,39 +795,31 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
   }, [token]);
 
   if (!mat) {
-    return <EmptyState icon={Box} title="物料不存在" description="未找到该物料" />;
+    return (
+      <EmptyState
+        icon={Box}
+        title="物料不存在"
+        description="未找到该物料"
+      />
+    );
   }
 
-  // 供应商列表
-  const matSuppliers = useMemo(
-    () => suppliers.filter(s => s.mat === code),
-    [suppliers, code]
+  // 该物料的供应商
+  const matSuppliers = suppliers.filter((s) => s.mat === code);
+
+  // 该物料关联的采购单（从 /api/purchase-orders 拉回来的）
+  const matPOs = poList.filter(
+    (po) => po.materialCode === mat.code || (mat.id && po.materialId === mat.id)
   );
 
-  // 该物料对应的采购订单
-  const matPOs = useMemo(
-    () =>
-      poList.filter(
-        po =>
-          po.materialCode === mat.code ||
-          (mat.id && po.materialId === mat.id)
-      ),
-    [poList, mat]
-  );
-
-  // ✅ 在途数量：基于采购订单计算，不再用 mat.transit
-  // 这里把「已发货 / 运输中」都算在途，你可以按自己的状态枚举调整
-  const transitQty = useMemo(
-    () =>
-      matPOs
-        .filter(po =>
-          ['shipped', 'in_transit', '已发货', '运输中'].includes(
-            (po.status || '').toLowerCase()
-          )
+  // 👉 在途数量：优先用采购订单求和，若列表为空则回退到 mats 里的 transit 字段
+  const transitQty =
+    matPOs.length > 0
+      ? matPOs.reduce(
+          (sum, po) => sum + Number(po.quantity || 0),
+          0
         )
-        .reduce((sum, po) => sum + (Number(po.quantity) || 0), 0),
-    [matPOs]
-  );
+      : Number(mat.transit || 0);
 
   return (
     <div>
@@ -845,58 +835,78 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
           fontSize: '14px',
           color: '#64748b',
           marginBottom: '24px',
-          padding: 0
+          padding: 0,
         }}
       >
         <ChevronLeft size={20} /> 返回
       </button>
 
-      {/* 头部信息卡片 */}
+      {/* 头部信息 */}
       <Card style={{ marginBottom: '24px' }}>
         <h1
           style={{
             fontSize: '24px',
             fontWeight: 700,
             color: '#0f172a',
-            margin: '0 0 8px 0'
+            margin: '0 0 8px 0',
           }}
         >
           {mat.name}
         </h1>
-        <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>{mat.spec}</p>
+        <p
+          style={{
+            fontSize: '14px',
+            color: '#64748b',
+            margin: 0,
+          }}
+        >
+          {mat.spec}
+        </p>
 
         <div
           style={{
             display: 'flex',
             gap: '32px',
             marginTop: '24px',
-            flexWrap: 'wrap'
+            flexWrap: 'wrap',
           }}
         >
           <div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
+            <div
+              style={{
+                fontSize: '11px',
+                color: '#64748b',
+                marginBottom: '4px',
+              }}
+            >
               当前库存
             </div>
             <div
               style={{
                 fontSize: '20px',
                 fontWeight: 700,
-                color: mat.inv < mat.safe ? '#dc2626' : '#0f172a'
+                color: mat.inv < mat.safe ? '#dc2626' : '#0f172a',
               }}
             >
-              {mat.inv.toLocaleString()}
+              {Number(mat.inv || 0).toLocaleString()}
             </div>
           </div>
 
           <div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
+            <div
+              style={{
+                fontSize: '11px',
+                color: '#64748b',
+                marginBottom: '4px',
+              }}
+            >
               在途数量
             </div>
             <div
               style={{
                 fontSize: '20px',
                 fontWeight: 700,
-                color: '#0f172a'
+                color: '#0f172a',
               }}
             >
               {transitQty.toLocaleString()}
@@ -904,29 +914,41 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
           </div>
 
           <div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
+            <div
+              style={{
+                fontSize: '11px',
+                color: '#64748b',
+                marginBottom: '4px',
+              }}
+            >
               安全库存
             </div>
             <div
               style={{
                 fontSize: '20px',
                 fontWeight: 700,
-                color: '#64748b'
+                color: '#64748b',
               }}
             >
-              {mat.safe.toLocaleString()}
+              {Number(mat.safe || 0).toLocaleString()}
             </div>
           </div>
 
           <div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
+            <div
+              style={{
+                fontSize: '11px',
+                color: '#64748b',
+                marginBottom: '4px',
+              }}
+            >
               采购周期
             </div>
             <div
               style={{
                 fontSize: '20px',
                 fontWeight: 700,
-                color: '#64748b'
+                color: '#64748b',
               }}
             >
               {mat.lead}天
@@ -934,14 +956,20 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
           </div>
 
           <div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
+            <div
+              style={{
+                fontSize: '11px',
+                color: '#64748b',
+                marginBottom: '4px',
+              }}
+            >
               采购员
             </div>
             <div
               style={{
                 fontSize: '20px',
                 fontWeight: 700,
-                color: '#3b82f6'
+                color: '#3b82f6',
               }}
             >
               {mat.buyer || '-'}
@@ -950,12 +978,12 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
         </div>
       </Card>
 
-      {/* 供应商 + 采购订单 两列 */}
+      {/* 下方供应商 + 采购单 */}
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-          gap: '24px'
+          gap: '24px',
         }}
       >
         {/* 供应商卡片 */}
@@ -965,15 +993,23 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
               fontSize: '16px',
               fontWeight: 700,
               color: '#0f172a',
-              margin: '0 0 16px 0'
+              margin: '0 0 16px 0',
             }}
           >
             供应商
           </h2>
           {matSuppliers.length === 0 ? (
-            <div style={{ color: '#64748b', fontSize: '14px' }}>暂无供应商信息</div>
+            <div style={{ color: '#64748b', fontSize: '14px' }}>
+              暂无供应商信息
+            </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+              }}
+            >
               {matSuppliers.map((s, idx) => (
                 <div
                   key={idx}
@@ -981,17 +1017,23 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
                     padding: '12px',
                     background: '#f8fafc',
                     borderRadius: '8px',
-                    border: s.main ? '2px solid #3b82f6' : '1px solid #e2e8f0'
+                    border: s.main
+                      ? '2px solid #3b82f6'
+                      : '1px solid #e2e8f0',
                   }}
                 >
                   <div
                     style={{
                       display: 'flex',
                       justifyContent: 'space-between',
-                      alignItems: 'center'
+                      alignItems: 'center',
                     }}
                   >
-                    <div style={{ fontWeight: 600, color: '#0f172a' }}>{s.name}</div>
+                    <div
+                      style={{ fontWeight: 600, color: '#0f172a' }}
+                    >
+                      {s.name}
+                    </div>
                     {s.main && (
                       <span
                         style={{
@@ -1000,7 +1042,7 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
                           color: '#3b82f6',
                           background: '#eff6ff',
                           padding: '2px 8px',
-                          borderRadius: '4px'
+                          borderRadius: '4px',
                         }}
                       >
                         主供应商
@@ -1011,7 +1053,7 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
                     style={{
                       fontSize: '12px',
                       color: '#64748b',
-                      marginTop: '8px'
+                      marginTop: '8px',
                     }}
                   >
                     准时率: {(s.onTime * 100).toFixed(0)}% | 质量率:{' '}
@@ -1023,33 +1065,45 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
           )}
         </Card>
 
-        {/* 采购订单卡片 */}
+        {/* 采购订单卡片（使用 matPOs） */}
         <Card>
           <h2
             style={{
               fontSize: '16px',
               fontWeight: 700,
               color: '#0f172a',
-              margin: '0 0 16px 0'
+              margin: '0 0 16px 0',
             }}
           >
             采购订单
           </h2>
 
           {poLoading && (
-            <div style={{ color: '#64748b', fontSize: '14px' }}>正在加载采购订单...</div>
+            <div style={{ color: '#64748b', fontSize: '14px' }}>
+              正在加载采购订单...
+            </div>
           )}
 
           {poError && (
-            <div style={{ color: '#ef4444', fontSize: '14px' }}>{poError}</div>
+            <div style={{ color: '#ef4444', fontSize: '14px' }}>
+              {poError}
+            </div>
           )}
 
           {!poLoading && !poError && matPOs.length === 0 && (
-            <div style={{ color: '#64748b', fontSize: '14px' }}>暂无采购订单</div>
+            <div style={{ color: '#64748b', fontSize: '14px' }}>
+              暂无采购订单
+            </div>
           )}
 
           {!poLoading && !poError && matPOs.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+              }}
+            >
               {matPOs.map((po) => (
                 <div
                   key={po.id}
@@ -1059,7 +1113,7 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
                     alignItems: 'center',
                     padding: '12px',
                     background: '#f8fafc',
-                    borderRadius: '8px'
+                    borderRadius: '8px',
                   }}
                 >
                   <div>
@@ -1067,17 +1121,25 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
                       style={{
                         fontWeight: 600,
                         color: '#0f172a',
-                        fontSize: '13px'
+                        fontSize: '13px',
                       }}
                     >
                       {po.poNo}
                     </div>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>
-                      {po.supplierName} | {Number(po.quantity || 0).toLocaleString()}{' '}
+                    <div
+                      style={{
+                        fontSize: '11px',
+                        color: '#64748b',
+                      }}
+                    >
+                      {po.supplierName} |{' '}
+                      {Number(po.quantity || 0).toLocaleString()}{' '}
                       {po.unit || ''}
                     </div>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>
+                  <div
+                    style={{ fontSize: '12px', color: '#64748b' }}
+                  >
                     {formatDate(po.expectedDate || po.orderDate)}
                   </div>
                 </div>
