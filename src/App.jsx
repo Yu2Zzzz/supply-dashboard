@@ -374,8 +374,56 @@ const Sidebar = memo(({ currentPage, onNavigate, collapsed, onToggle }) => {
 
 // ============ Dashboard ============
 const DashboardPage = memo(({ data, onNav }) => {
-  const { orders = [], orderLines = [], products = [], bom = [], mats = [], suppliers = [], pos = [] } = data;
-  const calcRisk = useMemo(() => createRiskCalculator(mats, pos, suppliers), [mats, pos, suppliers]);
+  const { orders = [], orderLines = [], products = [], bom = [], mats = [], suppliers = [] } = data;
+  const { token } = useAuth();
+  
+  // ✅ 修复：获取真实采购订单数据
+  const [poList, setPoList] = useState([]);
+  const [poLoading, setPoLoading] = useState(false);
+  
+  useEffect(() => {
+    if (!token) return;
+    
+    const fetchPOs = async () => {
+      try {
+        setPoLoading(true);
+        const params = new URLSearchParams({ page: '1', pageSize: '200' });
+        const res = await fetch(`${BASE_URL}/api/purchase-orders?${params.toString()}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+        });
+        
+        const json = await res.json();
+        if (json.success) {
+          setPoList(json.data?.list || json.data || []);
+        }
+      } catch (err) {
+        console.error('获取采购订单失败:', err);
+      } finally {
+        setPoLoading(false);
+      }
+    };
+    
+    fetchPOs();
+  }, [token]);
+  
+  // ✅ 转换真实采购订单为风险计算器格式
+  const poPos = useMemo(() => 
+    poList.map(po => ({
+      mat: po.materialCode,
+      qty: Number(po.quantity) || 0,
+      date: (po.expectedDate || po.orderDate || '').split('T')[0],
+      status: po.status,
+      supplier: po.supplierName,
+    })),
+    [poList]
+  );
+  
+  // ✅ 使用真实采购订单创建风险计算器
+  const calcRisk = useMemo(() => createRiskCalculator(mats, poPos, suppliers), [mats, poPos, suppliers]);
   
   const orderData = useMemo(() => orders.map(order => {
     const lines = orderLines.filter(l => l.orderId === order.id);
@@ -392,8 +440,8 @@ const DashboardPage = memo(({ data, onNav }) => {
     total: orderData.length,
     atRisk: orderData.filter(o => RISK[o.overallRisk]?.priority >= 2).length,
     lowStock: mats.filter(m => m.inv < m.safe).length,
-    inTransit: pos.filter(p => p.status === 'shipped').length
-  }), [orderData, mats, pos]);
+    inTransit: poList.filter(p => p.status === 'shipped' || p.status === 'producing').length
+  }), [orderData, mats, poList]);
 
   return (
     <div>
@@ -451,9 +499,57 @@ const DashboardPage = memo(({ data, onNav }) => {
 
 // ============ 订单详情页 ============
 const OrderDetailPage = memo(({ id, data, onNav, onBack }) => {
-  const { orders = [], orderLines = [], products = [], bom = [], mats = [], suppliers = [], pos = [] } = data;
+  const { orders = [], orderLines = [], products = [], bom = [], mats = [], suppliers = [] } = data;
+  const { token } = useAuth();
   const order = orders.find(o => o.id === id);
-  const calcRisk = useMemo(() => createRiskCalculator(mats, pos, suppliers), [mats, pos, suppliers]);
+  
+  // ✅ 修复：获取真实采购订单数据
+  const [poList, setPoList] = useState([]);
+  const [poLoading, setPoLoading] = useState(false);
+  
+  useEffect(() => {
+    if (!token) return;
+    
+    const fetchPOs = async () => {
+      try {
+        setPoLoading(true);
+        const params = new URLSearchParams({ page: '1', pageSize: '200' });
+        const res = await fetch(`${BASE_URL}/api/purchase-orders?${params.toString()}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+        });
+        
+        const json = await res.json();
+        if (json.success) {
+          setPoList(json.data?.list || json.data || []);
+        }
+      } catch (err) {
+        console.error('获取采购订单失败:', err);
+      } finally {
+        setPoLoading(false);
+      }
+    };
+    
+    fetchPOs();
+  }, [token]);
+  
+  // ✅ 转换真实采购订单为风险计算器格式
+  const poPos = useMemo(() => 
+    poList.map(po => ({
+      mat: po.materialCode,
+      qty: Number(po.quantity) || 0,
+      date: (po.expectedDate || po.orderDate || '').split('T')[0],
+      status: po.status,
+      supplier: po.supplierName,
+    })),
+    [poList]
+  );
+  
+  // ✅ 使用真实采购订单创建风险计算器
+  const calcRisk = useMemo(() => createRiskCalculator(mats, poPos, suppliers), [mats, poPos, suppliers]);
   
   if (!order) return <EmptyState icon={Package} title="订单不存在" description="未找到该订单" />;
 
@@ -506,6 +602,11 @@ const OrderDetailPage = memo(({ id, data, onNav, onBack }) => {
 
       <Card>
         <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', margin: '0 0 20px 0' }}>产品清单</h2>
+        {poLoading && (
+          <div style={{ padding: '12px', background: '#eff6ff', borderRadius: '8px', marginBottom: '16px', fontSize: '13px', color: '#1e40af' }}>
+            ⏳ 正在加载采购订单数据，计算准确风险...
+          </div>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {productData.map((prod, idx) => (
             <div key={idx} onClick={() => onNav('product-detail', prod.productCode)} style={{ padding: '16px', background: '#f8fafc', borderRadius: '12px', cursor: 'pointer', border: '1px solid #e2e8f0' }}>
