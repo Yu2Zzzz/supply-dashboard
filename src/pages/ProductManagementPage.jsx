@@ -581,9 +581,9 @@ const ProductManagementPage = memo(() => {
 
             <div style={{ marginBottom: '20px', padding: '16px', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '12px', color: '#fff' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', textAlign: 'center' }}>
-                <div><div style={{ fontSize: '12px', opacity: 0.9 }}>总库存</div><div style={{ fontSize: '24px', fontWeight: 800 }}>{productInventories.reduce((sum, inv) => sum + (inv.quantity || 0), 0)}</div></div>
+                <div><div style={{ fontSize: '12px', opacity: 0.9 }}>总库存</div><div style={{ fontSize: '24px', fontWeight: 800 }}>{productInventories.reduce((sum, inv) => sum + Number(inv.quantity ?? 0), 0).toFixed(2)}</div></div>
                 <div><div style={{ fontSize: '12px', opacity: 0.9 }}>已配置仓库</div><div style={{ fontSize: '24px', fontWeight: 800 }}>{productInventories.filter(inv => inv.hasInventory).length}/{warehouses.length}</div></div>
-                <div><div style={{ fontSize: '12px', opacity: 0.9 }}>总安全库存</div><div style={{ fontSize: '24px', fontWeight: 800 }}>{productInventories.filter(inv => inv.hasInventory).reduce((sum, inv) => sum + (inv.safetyStock || 0), 0)}</div></div>
+                <div><div style={{ fontSize: '12px', opacity: 0.9 }}>总安全库存</div><div style={{ fontSize: '24px', fontWeight: 800 }}>{productInventories.filter(inv => inv.hasInventory).reduce((sum, inv) => sum + Number(inv.safetyStock ?? 0), 0).toFixed(2)}</div></div>
               </div>
             </div>
 
