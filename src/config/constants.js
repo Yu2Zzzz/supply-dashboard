@@ -3,12 +3,12 @@ import { CheckCircle, AlertTriangle, XCircle, Clock } from 'lucide-react';
 
 export const BASE_URL = 'https://supply-backend-production.up.railway.app';
 
-// 风险等级（包含icon）
+// 风险等级（包含icon和priority）
 export const RISK = {
-  low: { label: '低', color: '#10b981', bg: '#d1fae5', icon: CheckCircle },
-  medium: { label: '中', color: '#f59e0b', bg: '#fef3c7', icon: AlertTriangle },
-  high: { label: '高', color: '#ef4444', bg: '#fee2e2', icon: XCircle },
-  pending: { label: '待定', color: '#64748b', bg: '#f1f5f9', icon: Clock }
+  low: { label: '低', color: '#10b981', bg: '#d1fae5', icon: CheckCircle, priority: 1 },
+  medium: { label: '中', color: '#f59e0b', bg: '#fef3c7', icon: AlertTriangle, priority: 2 },
+  high: { label: '高', color: '#ef4444', bg: '#fee2e2', icon: XCircle, priority: 3 },
+  pending: { label: '待定', color: '#64748b', bg: '#f1f5f9', icon: Clock, priority: 0 }
 };
 
 // ✅ 采购订单状态：草稿 → 已确认 → 已发货 → 已到货（去掉生产中）

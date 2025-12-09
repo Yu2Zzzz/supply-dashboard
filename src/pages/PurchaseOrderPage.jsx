@@ -1,6 +1,6 @@
-// src/pages/PurchaseOrderPage.jsx - 修复版（状态：草稿→已确认→已发货→已到货）
+// src/pages/PurchaseOrderPage.jsx - 修复版（添加关联销售订单）
 import React, { memo, useState, useCallback, useEffect } from 'react';
-import { Plus, Search, RefreshCw, Edit, Trash2, Save, ShoppingCart, ArrowRight, X } from 'lucide-react';
+import { Plus, Search, RefreshCw, Edit, Trash2, Save, ShoppingCart, ArrowRight, X, FileText } from 'lucide-react';
 import { useApi } from '../hooks/useApi';
 import { useAuth } from '../contexts/AuthContext';
 import { PO_STATUS } from '../config/constants';
@@ -87,23 +87,31 @@ const PurchaseOrderPage = memo(() => {
   const [orders, setOrders] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
+  const [salesOrders, setSalesOrders] = useState([]); // ✨ 销售订单列表
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [formData, setFormData] = useState({ materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: '', expectedDate: '', status: 'draft', remark: '' });
+  // ✨ 添加 salesOrderId 字段
+  const [formData, setFormData] = useState({ 
+    materialId: '', supplierId: '', salesOrderId: '', 
+    quantity: 0, unitPrice: 0, orderDate: '', expectedDate: '', 
+    status: 'draft', remark: '' 
+  });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [ordersRes, materialsRes, suppliersRes] = await Promise.all([
+    const [ordersRes, materialsRes, suppliersRes, salesOrdersRes] = await Promise.all([
       request('/api/purchase-orders'),
       request('/api/materials'),
-      request('/api/suppliers')
+      request('/api/suppliers'),
+      request('/api/sales-orders') // ✨ 获取销售订单
     ]);
     if (ordersRes.success) setOrders(ordersRes.data?.list || ordersRes.data || []);
     if (materialsRes.success) setMaterials(materialsRes.data?.list || materialsRes.data || []);
     if (suppliersRes.success) setSuppliers(suppliersRes.data?.list || suppliersRes.data || []);
+    if (salesOrdersRes.success) setSalesOrders(salesOrdersRes.data?.list || salesOrdersRes.data || []);
     setLoading(false);
   }, [request]);
 
@@ -111,10 +119,15 @@ const PurchaseOrderPage = memo(() => {
 
   const handleSubmit = async () => {
     const submitData = {
-      materialId: parseInt(formData.materialId), supplierId: parseInt(formData.supplierId),
-      quantity: parseInt(formData.quantity) || 0, unitPrice: parseFloat(formData.unitPrice) || 0,
-      orderDate: formData.orderDate, expectedDate: formData.expectedDate,
-      status: formData.status || 'draft', remark: formData.remark || ''
+      materialId: parseInt(formData.materialId), 
+      supplierId: parseInt(formData.supplierId),
+      salesOrderId: formData.salesOrderId ? parseInt(formData.salesOrderId) : null, // ✨ 关联销售订单
+      quantity: parseInt(formData.quantity) || 0, 
+      unitPrice: parseFloat(formData.unitPrice) || 0,
+      orderDate: formData.orderDate, 
+      expectedDate: formData.expectedDate,
+      status: formData.status || 'draft', 
+      remark: formData.remark || ''
     };
     const endpoint = editingOrder ? `/api/purchase-orders/${editingOrder.id}` : '/api/purchase-orders';
     const method = editingOrder ? 'PUT' : 'POST';
@@ -133,11 +146,13 @@ const PurchaseOrderPage = memo(() => {
     const updateData = {
       materialId: parseInt(order.materialId || order.material_id),
       supplierId: parseInt(order.supplierId || order.supplier_id),
+      salesOrderId: order.salesOrderId || order.sales_order_id || null, // ✨ 保留关联
       quantity: parseInt(order.quantity) || 0,
       unitPrice: parseFloat(order.unitPrice || order.unit_price) || 0,
       orderDate: formatDateInput(order.orderDate || order.order_date),
       expectedDate: formatDateInput(order.expectedDate || order.expected_date),
-      status: newStatus, remark: order.remark || ''
+      status: newStatus, 
+      remark: order.remark || ''
     };
     const res = await request(`/api/purchase-orders/${order.id}`, { method: 'PUT', body: JSON.stringify(updateData) });
     if (res.success) { fetchData(); alert(`状态已更新为"${PO_STATUS[newStatus]?.text || newStatus}"`); }
@@ -150,15 +165,30 @@ const PurchaseOrderPage = memo(() => {
       setFormData({
         materialId: order.materialId || order.material_id || '',
         supplierId: order.supplierId || order.supplier_id || '',
-        quantity: order.quantity || 0, unitPrice: order.unitPrice || order.unit_price || 0,
+        salesOrderId: order.salesOrderId || order.sales_order_id || '', // ✨ 关联销售订单
+        quantity: order.quantity || 0, 
+        unitPrice: order.unitPrice || order.unit_price || 0,
         orderDate: formatDateInput(order.orderDate || order.order_date),
         expectedDate: formatDateInput(order.expectedDate || order.expected_date),
-        status: order.status || 'draft', remark: order.remark || ''
+        status: order.status || 'draft', 
+        remark: order.remark || ''
       });
     } else {
-      setFormData({ materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: new Date().toISOString().split('T')[0], expectedDate: '', status: 'draft', remark: '' });
+      setFormData({ 
+        materialId: '', supplierId: '', salesOrderId: '', 
+        quantity: 0, unitPrice: 0, 
+        orderDate: new Date().toISOString().split('T')[0], expectedDate: '', 
+        status: 'draft', remark: '' 
+      });
     }
     setShowModal(true);
+  };
+
+  // ✨ 获取销售订单名称
+  const getSalesOrderName = (salesOrderId) => {
+    if (!salesOrderId) return '-';
+    const so = salesOrders.find(s => s.id == salesOrderId);
+    return so ? `${so.orderNo} (${so.customerName || '未知客户'})` : `SO#${salesOrderId}`;
   };
 
   const filtered = orders.filter(o => {
@@ -187,7 +217,6 @@ const PurchaseOrderPage = memo(() => {
               style={{ width: '100%', padding: '12px 14px 12px 42px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', boxSizing: 'border-box' }} />
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {/* ✅ 修复：去掉 producing，只保留 draft, confirmed, shipped, arrived */}
             {['all', 'draft', 'confirmed', 'shipped', 'arrived'].map(status => (
               <button key={status} onClick={() => setStatusFilter(status)} style={{ 
                 padding: '10px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '12px',
@@ -213,6 +242,8 @@ const PurchaseOrderPage = memo(() => {
                   <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>采购单号</th>
                   <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>物料</th>
                   <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>供应商</th>
+                  {/* ✨ 新增关联销售订单列 */}
+                  <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>关联销售单</th>
                   <th style={{ textAlign: 'right', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>数量</th>
                   <th style={{ textAlign: 'right', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>金额</th>
                   <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>预计到货</th>
@@ -223,11 +254,27 @@ const PurchaseOrderPage = memo(() => {
               <tbody>
                 {filtered.map(order => {
                   const statusInfo = PO_STATUS[order.status] || {};
+                  const salesOrderId = order.salesOrderId || order.sales_order_id;
                   return (
                     <tr key={order.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                       <td style={{ padding: '16px', fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>{order.poNo}</td>
                       <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{order.materialName || '-'}</td>
                       <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{order.supplierName || '-'}</td>
+                      {/* ✨ 显示关联销售订单 */}
+                      <td style={{ padding: '16px', fontSize: '13px' }}>
+                        {salesOrderId ? (
+                          <span style={{ 
+                            display: 'inline-flex', alignItems: 'center', gap: '4px',
+                            padding: '4px 10px', background: '#eff6ff', color: '#3b82f6', 
+                            borderRadius: '6px', fontWeight: 600, fontSize: '12px'
+                          }}>
+                            <FileText size={12} />
+                            {getSalesOrderName(salesOrderId)}
+                          </span>
+                        ) : (
+                          <span style={{ color: '#94a3b8', fontSize: '12px' }}>通用采购</span>
+                        )}
+                      </td>
                       <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#0f172a', textAlign: 'right' }}>{(order.quantity || 0).toLocaleString()}</td>
                       <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#10b981', textAlign: 'right' }}>¥{(order.totalAmount || 0).toLocaleString()}</td>
                       <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{formatDate(order.expectedDate)}</td>
@@ -254,13 +301,33 @@ const PurchaseOrderPage = memo(() => {
         )}
       </Card>
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingOrder ? '编辑采购单' : '新增采购单'}>
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingOrder ? '编辑采购单' : '新增采购单'} width="600px">
         {editingOrder && (
           <div style={{ marginBottom: '16px', padding: '12px 16px', background: '#f8fafc', borderRadius: '8px' }}>
             <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>采购单号</div>
             <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>{editingOrder.poNo}</div>
           </div>
         )}
+        
+        {/* ✨ 关联销售订单选择 */}
+        <div style={{ marginBottom: '16px', padding: '12px 16px', background: '#eff6ff', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+          <div style={{ fontSize: '12px', color: '#3b82f6', marginBottom: '8px', fontWeight: 600 }}>📋 关联销售订单（可选）</div>
+          <select 
+            value={formData.salesOrderId} 
+            onChange={e => setFormData({ ...formData, salesOrderId: e.target.value })}
+            style={{ width: '100%', padding: '10px 12px', fontSize: '14px', border: '2px solid #93c5fd', borderRadius: '8px', outline: 'none', cursor: 'pointer' }}
+          >
+            <option value="">不关联（通用采购）</option>
+            {salesOrders.map(so => (
+              <option key={so.id} value={so.id}>
+                {so.orderNo} - {so.customerName || '未知客户'}
+              </option>
+            ))}
+          </select>
+          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '6px' }}>
+            选择销售订单后，此采购将记录为该订单的物料采购
+          </div>
+        </div>
         
         <Select label="物料" value={formData.materialId} onChange={v => setFormData({ ...formData, materialId: v })} required
           options={materials.map(m => ({ value: m.id, label: `${m.materialCode || m.material_code} - ${m.name}` }))} />
@@ -282,7 +349,7 @@ const PurchaseOrderPage = memo(() => {
             options={Object.entries(PO_STATUS).map(([k, v]) => ({ value: k, label: v.text }))} />
         )}
 
-        {/* ✅ 状态流转说明（更新为正确流程） */}
+        {/* 状态流转说明 */}
         <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', marginTop: '16px' }}>
           <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>状态流转说明</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', flexWrap: 'wrap' }}>
