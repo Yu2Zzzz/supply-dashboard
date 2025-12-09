@@ -133,19 +133,32 @@ const MaterialManagementPage = memo(() => {
     setSelectedMaterial(material);
     setDetailLoading(true);
     
-    // 获取供应商数据
-    const suppliersRes = await request('/api/suppliers');
-    if (suppliersRes.success) {
-      const allSuppliers = suppliersRes.data?.list || suppliersRes.data || [];
-      // 过滤该物料的供应商（这里假设supplier有materialId字段，根据实际调整）
-      setMaterialSuppliers(allSuppliers);
+    try {
+      // 获取供应商数据
+      const suppliersRes = await request('/api/suppliers');
+      if (suppliersRes.success) {
+        const allSuppliers = suppliersRes.data?.list || suppliersRes.data || [];
+        setMaterialSuppliers(allSuppliers);
+      } else {
+        setMaterialSuppliers([]);
+      }
+    } catch (error) {
+      console.error('获取供应商失败:', error);
+      setMaterialSuppliers([]);
     }
     
-    // 获取采购订单数据
-    const posRes = await request(`/api/purchase-orders?materialId=${material.id}`);
-    if (posRes.success) {
-      const pos = posRes.data?.list || posRes.data || [];
-      setMaterialPOs(pos);
+    try {
+      // 获取采购订单数据
+      const posRes = await request(`/api/purchase-orders?materialId=${material.id}`);
+      if (posRes.success) {
+        const pos = posRes.data?.list || posRes.data || [];
+        setMaterialPOs(pos);
+      } else {
+        setMaterialPOs([]);
+      }
+    } catch (error) {
+      console.error('获取采购订单失败:', error);
+      setMaterialPOs([]);
     }
     
     setDetailLoading(false);
@@ -353,7 +366,7 @@ const MaterialManagementPage = memo(() => {
             </div>
             <div>
               <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>单价</div>
-              <div style={{ fontSize: '18px', fontWeight: 700, color: '#10b981' }}>¥{(selectedMaterial.price || 0).toFixed(2)}</div>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: '#10b981' }}>¥{(Number(selectedMaterial.price) || 0).toFixed(2)}</div>
             </div>
             <div>
               <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>当前库存</div>
@@ -565,7 +578,7 @@ const MaterialManagementPage = memo(() => {
                 <div style={{ textAlign: 'center' }}>
                   <div style={{ fontSize: '12px', color: '#064e3b', fontWeight: 600, marginBottom: '4px' }}>总库存</div>
                   <div style={{ fontSize: '28px', fontWeight: 800, color: '#10b981' }}>
-                    {materialInventories.reduce((sum, inv) => sum + (inv.quantity || 0), 0).toFixed(1)}
+                    {materialInventories.reduce((sum, inv) => sum + (Number(inv.quantity) || 0), 0).toFixed(1)}
                   </div>
                 </div>
               </div>
@@ -645,7 +658,7 @@ const MaterialManagementPage = memo(() => {
                           <div>
                             <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '6px' }}>当前库存</div>
                             <div style={{ fontSize: '20px', fontWeight: 700, color: '#0f172a' }}>
-                              {(inventory.quantity || 0).toFixed(1)}
+                              {(Number(inventory.quantity) || 0).toFixed(1)}
                             </div>
                           </div>
                           <div>
