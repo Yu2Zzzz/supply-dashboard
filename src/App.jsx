@@ -681,6 +681,24 @@ const OrderDetailPage = memo(({ id, data, onNav, onBack }) => {
     fetchCompleteOrderData();
   }, [id, token, order]);
   
+  // ✅ 计算订单整体风险
+  const orderOverallRisk = useMemo(() => {
+    if (productDataWithRisk.length === 0) return 'ongoing';
+    
+    const productRisks = productDataWithRisk.map(p => p.overallRisk);
+    let overallRisk = highestRisk(productRisks);
+    
+    // 特殊规则：如果今天已过交付日期 → 强制"逾期"
+    if (order && order.deliveryDate) {
+      const daysLeft = daysDiff(order.deliveryDate, TODAY);
+      if (daysLeft < 0 && order.status !== 'completed') {
+        overallRisk = 'overdue';
+      }
+    }
+    
+    return overallRisk;
+  }, [productDataWithRisk, order]);
+  
   if (!order) return <EmptyState icon={Package} title="订单不存在" description="未找到该订单" />;
 
   return (
