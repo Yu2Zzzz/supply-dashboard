@@ -106,5 +106,11 @@ export const SO_STATUS = {
     color: '#10b981', 
     bgColor: '#d1fae5',
     next: null
+  },
+   overdue: { 
+    text: '逾期',
+    color: '#7c3aed',
+    bgColor: '#ede9fe',
+    next: null
   }
 };
