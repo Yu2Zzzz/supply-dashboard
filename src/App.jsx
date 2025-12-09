@@ -568,7 +568,6 @@ const ProductDetailPage = memo(({ code, data, onNav, onBack }) => {
 });
 
 // ============ 物料详情页 ============
-// ============ 物料详情页 ============
 const MaterialDetailPage = memo(({ code, data, onBack }) => {
   const { mats = [], suppliers = [] } = data;
   const mat = mats.find(m => m.code === code);
