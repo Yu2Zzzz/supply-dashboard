@@ -3,12 +3,48 @@ import { CheckCircle, AlertTriangle, XCircle, Clock } from 'lucide-react';
 
 export const BASE_URL = 'https://supply-backend-production.up.railway.app';
 
-// 风险等级（包含icon和priority）
+// 风险等级（要和 createRiskCalculator 里的 level 对得上）
 export const RISK = {
-  low: { label: '低', color: '#10b981', bg: '#d1fae5', icon: CheckCircle, priority: 1 },
-  medium: { label: '中', color: '#f59e0b', bg: '#fef3c7', icon: AlertTriangle, priority: 2 },
-  high: { label: '高', color: '#ef4444', bg: '#fee2e2', icon: XCircle, priority: 3 },
-  pending: { label: '待定', color: '#64748b', bg: '#f1f5f9', icon: Clock, priority: 0 }
+  // 正常 / 安全
+  ongoing: {
+    text: '正常',
+    color: '#10b981',
+    bgColor: '#dcfce7',
+    icon: CheckCircle,
+    priority: 1,
+  },
+  // 库存吃紧、需要关注
+  warning: {
+    text: '预警',
+    color: '#f97316',
+    bgColor: '#ffedd5',
+    icon: AlertTriangle,
+    priority: 2,
+  },
+  // 严重缺料 / 高风险
+  urgent: {
+    text: '紧急',
+    color: '#ef4444',
+    bgColor: '#fee2e2',
+    icon: XCircle,
+    priority: 3,
+  },
+  // 交期已经被采购 /生产拖延
+  overdue: {
+    text: '逾期',
+    color: '#7c3aed',
+    bgColor: '#ede9fe',
+    icon: AlertTriangle,
+    priority: 3,
+  },
+  // 没有任何采购在途但有缺口 -> 需要立刻下单
+  pending: {
+    text: '待计划',
+    color: '#64748b',
+    bgColor: '#f1f5f9',
+    icon: Clock,
+    priority: 0,
+  },
 };
 
 // ✅ 采购订单状态：草稿 → 已确认 → 已发货 → 已到货（去掉生产中）

@@ -482,10 +482,26 @@ const OrderDetailPage = memo(({ id, data, onNav, onBack }) => {
           <StatusBadge level={highestRisk(productData.map(p => p.overallRisk))} />
         </div>
         <div style={{ display: 'flex', gap: '32px', marginTop: '24px', flexWrap: 'wrap' }}>
-          <div><div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>下单日期</div><div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{order.orderDate}</div></div>
-          <div><div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>交付日期</div><div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{order.deliveryDate}</div></div>
-          <div><div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>业务员</div><div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{order.salesPerson}</div></div>
-        </div>
+  <div>
+    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>下单日期</div>
+    <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>
+      {order.orderDate ? formatDate(order.orderDate) : '-'}
+    </div>
+  </div>
+  <div>
+    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>交付日期</div>
+    <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>
+      {order.deliveryDate ? formatDate(order.deliveryDate) : '-'}
+    </div>
+  </div>
+  <div>
+    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>业务员</div>
+    <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>
+      {order.salesPerson || '-'}
+    </div>
+  </div>
+</div>
+
       </Card>
 
       <Card>
