@@ -1,32 +1,74 @@
-// src/config/constants.js
-import { CheckCircle, AlertTriangle, AlertOctagon, XCircle, Clock } from 'lucide-react';
+// src/config/constants.js - 修复版状态流程
+import { CheckCircle, AlertTriangle, XCircle, Clock } from 'lucide-react';
 
-export const BASE_URL =
-  import.meta.env.VITE_API_URL || 'http://localhost:4000';
+export const BASE_URL = 'https://supply-backend-production.up.railway.app';
 
-
+// 风险等级（包含icon）
 export const RISK = {
-  ongoing: { color: '#10b981', bgColor: '#d1fae5', text: '正常', icon: CheckCircle, priority: 1 },
-  warning: { color: '#f59e0b', bgColor: '#fef3c7', text: '预警', icon: AlertTriangle, priority: 2 },
-  urgent: { color: '#f97316', bgColor: '#fed7aa', text: '紧急', icon: AlertOctagon, priority: 3 },
-  overdue: { color: '#ef4444', bgColor: '#fee2e2', text: '延期', icon: XCircle, priority: 4 },
-  pending: { color: '#8b5cf6', bgColor: '#ede9fe', text: '待采购', icon: Clock, priority: 5 },
+  low: { label: '低', color: '#10b981', bg: '#d1fae5', icon: CheckCircle },
+  medium: { label: '中', color: '#f59e0b', bg: '#fef3c7', icon: AlertTriangle },
+  high: { label: '高', color: '#ef4444', bg: '#fee2e2', icon: XCircle },
+  pending: { label: '待定', color: '#64748b', bg: '#f1f5f9', icon: Clock }
 };
 
+// ✅ 采购订单状态：草稿 → 已确认 → 已发货 → 已到货（去掉生产中）
 export const PO_STATUS = {
-  draft: { color: '#64748b', bgColor: '#f1f5f9', text: '草稿', next: 'confirmed' },
-  confirmed: { color: '#3b82f6', bgColor: '#dbeafe', text: '已确认', next: 'producing' },
-  producing: { color: '#f59e0b', bgColor: '#fef3c7', text: '生产中', next: 'shipped' },
-  shipped: { color: '#8b5cf6', bgColor: '#ede9fe', text: '已发货', next: 'arrived' },
-  arrived: { color: '#10b981', bgColor: '#d1fae5', text: '已到货', next: null },
-  cancelled: { color: '#ef4444', bgColor: '#fee2e2', text: '已取消', next: null },
+  draft: { 
+    text: '草稿', 
+    color: '#64748b', 
+    bgColor: '#f1f5f9',
+    next: 'confirmed'
+  },
+  confirmed: { 
+    text: '已确认', 
+    color: '#3b82f6', 
+    bgColor: '#dbeafe',
+    next: 'shipped'
+  },
+  shipped: { 
+    text: '已发货', 
+    color: '#8b5cf6', 
+    bgColor: '#ede9fe',
+    next: 'arrived'
+  },
+  arrived: { 
+    text: '已到货', 
+    color: '#10b981', 
+    bgColor: '#d1fae5',
+    next: null
+  }
 };
 
+// ✅ 业务订单状态：待确认 → 已确认 → 生产中 → 已发货 → 已交付
 export const SO_STATUS = {
-  pending: { color: '#64748b', bgColor: '#f1f5f9', text: '待确认' },
-  confirmed: { color: '#3b82f6', bgColor: '#dbeafe', text: '已确认' },
-  producing: { color: '#f59e0b', bgColor: '#fef3c7', text: '生产中' },
-  shipped: { color: '#8b5cf6', bgColor: '#ede9fe', text: '已发货' },
-  completed: { color: '#10b981', bgColor: '#d1fae5', text: '已完成' },
-  cancelled: { color: '#ef4444', bgColor: '#fee2e2', text: '已取消' },
+  pending: { 
+    text: '待确认', 
+    color: '#64748b', 
+    bgColor: '#f1f5f9',
+    next: 'confirmed'
+  },
+  confirmed: { 
+    text: '已确认', 
+    color: '#3b82f6', 
+    bgColor: '#dbeafe',
+    next: 'producing'
+  },
+  producing: { 
+    text: '生产中', 
+    color: '#f59e0b', 
+    bgColor: '#fef3c7',
+    next: 'shipped'
+  },
+  shipped: { 
+    text: '已发货', 
+    color: '#8b5cf6', 
+    bgColor: '#ede9fe',
+    next: 'completed'
+  },
+  completed: { 
+    text: '已交付', 
+    color: '#10b981', 
+    bgColor: '#d1fae5',
+    next: null
+  }
 };

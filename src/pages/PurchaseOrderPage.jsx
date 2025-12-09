@@ -1,4 +1,4 @@
-// src/pages/PurchaseOrderPage.jsx
+// src/pages/PurchaseOrderPage.jsx - 修复版（状态：草稿→已确认→已发货→已到货）
 import React, { memo, useState, useCallback, useEffect } from 'react';
 import { Plus, Search, RefreshCw, Edit, Trash2, Save, ShoppingCart, ArrowRight, X } from 'lucide-react';
 import { useApi } from '../hooks/useApi';
@@ -8,18 +8,11 @@ import { formatDate, formatDateInput } from '../utils/helpers';
 
 // ============ 内置 UI 组件 ============
 const Card = memo(({ children, style = {} }) => (
-  <div style={{ background: '#fff', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', ...style }}>
-    {children}
-  </div>
+  <div style={{ background: '#fff', borderRadius: '16px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', ...style }}>{children}</div>
 ));
 
 const Button = memo(({ children, onClick, variant = 'primary', icon: Icon, size = 'md', disabled = false, style = {} }) => {
-  const baseStyle = {
-    display: 'inline-flex', alignItems: 'center', gap: '8px', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
-    fontWeight: 600, borderRadius: size === 'sm' ? '8px' : '12px', transition: 'all 0.2s',
-    padding: size === 'sm' ? '8px 12px' : '12px 20px', fontSize: size === 'sm' ? '12px' : '14px',
-    opacity: disabled ? 0.5 : 1, ...style
-  };
+  const baseStyle = { display: 'inline-flex', alignItems: 'center', gap: '8px', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: 600, borderRadius: size === 'sm' ? '8px' : '12px', transition: 'all 0.2s', padding: size === 'sm' ? '8px 12px' : '12px 20px', fontSize: size === 'sm' ? '12px' : '14px', opacity: disabled ? 0.5 : 1, ...style };
   const variants = {
     primary: { background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: '#fff' },
     secondary: { background: '#f1f5f9', color: '#374151' },
@@ -65,9 +58,7 @@ const Modal = memo(({ isOpen, onClose, title, children, width = '500px' }) => {
 
 const EmptyState = memo(({ icon: Icon, title, description }) => (
   <div style={{ textAlign: 'center', padding: '48px 24px' }}>
-    <div style={{ width: '64px', height: '64px', margin: '0 auto 16px', background: '#f1f5f9', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <Icon size={28} style={{ color: '#94a3b8' }} />
-    </div>
+    <div style={{ width: '64px', height: '64px', margin: '0 auto 16px', background: '#f1f5f9', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon size={28} style={{ color: '#94a3b8' }} /></div>
     <div style={{ fontSize: '16px', fontWeight: 600, color: '#374151', marginBottom: '4px' }}>{title}</div>
     <div style={{ fontSize: '14px', color: '#94a3b8' }}>{description}</div>
   </div>
@@ -91,8 +82,8 @@ const StatusTag = memo(({ status, statusMap }) => {
 // ============ 采购订单页面 ============
 const PurchaseOrderPage = memo(() => {
   const { request } = useApi();
-  const { user } = useAuth(); // 获取当前用户
-  const isAdmin = user?.role === 'admin'; // 判断是否管理员
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [orders, setOrders] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -101,9 +92,7 @@ const PurchaseOrderPage = memo(() => {
   const [editingOrder, setEditingOrder] = useState(null);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [formData, setFormData] = useState({
-    materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: '', expectedDate: '', status: 'draft', remark: ''
-  });
+  const [formData, setFormData] = useState({ materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: '', expectedDate: '', status: 'draft', remark: '' });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -122,83 +111,49 @@ const PurchaseOrderPage = memo(() => {
 
   const handleSubmit = async () => {
     const submitData = {
-      materialId: parseInt(formData.materialId),
-      supplierId: parseInt(formData.supplierId),
-      quantity: formData.quantity,
-      unitPrice: formData.unitPrice,
-      orderDate: formData.orderDate,
-      expectedDate: formData.expectedDate,
-      status: formData.status || 'draft',
-      remark: formData.remark || '',
-      totalAmount: formData.quantity * formData.unitPrice
+      materialId: parseInt(formData.materialId), supplierId: parseInt(formData.supplierId),
+      quantity: parseInt(formData.quantity) || 0, unitPrice: parseFloat(formData.unitPrice) || 0,
+      orderDate: formData.orderDate, expectedDate: formData.expectedDate,
+      status: formData.status || 'draft', remark: formData.remark || ''
     };
-    
-    // 编辑时加上 poNo
-    if (editingOrder) {
-      submitData.poNo = editingOrder.poNo;
-    }
-    
     const endpoint = editingOrder ? `/api/purchase-orders/${editingOrder.id}` : '/api/purchase-orders';
     const method = editingOrder ? 'PUT' : 'POST';
     const res = await request(endpoint, { method, body: JSON.stringify(submitData) });
-    if (res.success) { setShowModal(false); fetchData(); }
-    else alert(res.message || '操作失败');
+    if (res.success) { setShowModal(false); fetchData(); alert('保存成功！'); }
+    else { alert(res.message || '操作失败'); }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('确定要删除该采购订单吗？')) return;
+    if (!window.confirm('确定要删除该采购单吗？')) return;
     const res = await request(`/api/purchase-orders/${id}`, { method: 'DELETE' });
-    if (res.success) fetchData();
-    else alert(res.message || '删除失败');
+    if (res.success) { fetchData(); alert('删除成功！'); } else { alert(res.message || '删除失败'); }
   };
 
   const handleStatusChange = async (order, newStatus) => {
-    // 格式化日期为 YYYY-MM-DD
-    const formatDateForApi = (dateStr) => {
-      if (!dateStr) return null;
-      const d = new Date(dateStr);
-      return d.toISOString().split('T')[0]; // 只取 YYYY-MM-DD 部分
-    };
-
-    // 使用 PUT 更新状态 - 确保所有必填字段都有值
     const updateData = {
       materialId: parseInt(order.materialId || order.material_id),
       supplierId: parseInt(order.supplierId || order.supplier_id),
-      quantity: order.quantity || 0,
-      unitPrice: order.unitPrice || order.unit_price || 0,
-      orderDate: formatDateForApi(order.orderDate || order.order_date),
-      expectedDate: formatDateForApi(order.expectedDate || order.expected_date),
-      status: newStatus,
-      poNo: order.poNo || order.po_no,
-      remark: order.remark || '',
-      totalAmount: order.totalAmount || order.total_amount || (order.quantity * (order.unitPrice || order.unit_price || 0))
+      quantity: parseInt(order.quantity) || 0,
+      unitPrice: parseFloat(order.unitPrice || order.unit_price) || 0,
+      orderDate: formatDateInput(order.orderDate || order.order_date),
+      expectedDate: formatDateInput(order.expectedDate || order.expected_date),
+      status: newStatus, remark: order.remark || ''
     };
-    
-    console.log('状态更新数据:', updateData);
-    
-    const res = await request(`/api/purchase-orders/${order.id}`, { 
-      method: 'PUT', 
-      body: JSON.stringify(updateData) 
-    });
-    if (res.success) fetchData();
-    else {
-      console.error('状态更新失败:', res);
-      alert(res.message || '状态更新失败');
-    }
+    const res = await request(`/api/purchase-orders/${order.id}`, { method: 'PUT', body: JSON.stringify(updateData) });
+    if (res.success) { fetchData(); alert(`状态已更新为"${PO_STATUS[newStatus]?.text || newStatus}"`); }
+    else { alert(res.message || '状态更新失败'); }
   };
 
   const openModal = (order = null) => {
     setEditingOrder(order);
     if (order) {
       setFormData({
-        materialId: order.materialId || '', 
-        supplierId: order.supplierId || '', 
-        quantity: order.quantity || 0, 
-        unitPrice: order.unitPrice || 0,
-        orderDate: formatDateInput(order.orderDate), 
-        expectedDate: formatDateInput(order.expectedDate), 
-        status: order.status || 'draft',
-        remark: order.remark || ''
+        materialId: order.materialId || order.material_id || '',
+        supplierId: order.supplierId || order.supplier_id || '',
+        quantity: order.quantity || 0, unitPrice: order.unitPrice || order.unit_price || 0,
+        orderDate: formatDateInput(order.orderDate || order.order_date),
+        expectedDate: formatDateInput(order.expectedDate || order.expected_date),
+        status: order.status || 'draft', remark: order.remark || ''
       });
     } else {
       setFormData({ materialId: '', supplierId: '', quantity: 0, unitPrice: 0, orderDate: new Date().toISOString().split('T')[0], expectedDate: '', status: 'draft', remark: '' });
@@ -232,7 +187,8 @@ const PurchaseOrderPage = memo(() => {
               style={{ width: '100%', padding: '12px 14px 12px 42px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', boxSizing: 'border-box' }} />
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {['all', 'draft', 'confirmed', 'producing', 'shipped', 'arrived'].map(status => (
+            {/* ✅ 修复：去掉 producing，只保留 draft, confirmed, shipped, arrived */}
+            {['all', 'draft', 'confirmed', 'shipped', 'arrived'].map(status => (
               <button key={status} onClick={() => setStatusFilter(status)} style={{ 
                 padding: '10px 14px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '12px',
                 background: statusFilter === status ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : '#f1f5f9', 
@@ -298,58 +254,48 @@ const PurchaseOrderPage = memo(() => {
         )}
       </Card>
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingOrder ? '编辑采购单' : '新增采购单'} width="600px">
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingOrder ? '编辑采购单' : '新增采购单'}>
         {editingOrder && (
           <div style={{ marginBottom: '16px', padding: '12px 16px', background: '#f8fafc', borderRadius: '8px' }}>
             <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>采购单号</div>
             <div style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>{editingOrder.poNo}</div>
           </div>
         )}
-        <Select label="物料" value={formData.materialId} onChange={v => setFormData({ ...formData, materialId: v })} required 
+        
+        <Select label="物料" value={formData.materialId} onChange={v => setFormData({ ...formData, materialId: v })} required
           options={materials.map(m => ({ value: m.id, label: `${m.materialCode || m.material_code} - ${m.name}` }))} />
-        <Select label="供应商" value={formData.supplierId} onChange={v => setFormData({ ...formData, supplierId: v })} required 
+        <Select label="供应商" value={formData.supplierId} onChange={v => setFormData({ ...formData, supplierId: v })} required
           options={suppliers.map(s => ({ value: s.id, label: s.name }))} />
+        
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <Input label="数量" type="number" value={formData.quantity} onChange={v => setFormData({ ...formData, quantity: parseInt(v) || 0 })} required />
-          <Input label="单价" type="number" value={formData.unitPrice} onChange={v => setFormData({ ...formData, unitPrice: parseFloat(v) || 0 })} />
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <Input label="下单日期" type="date" value={formData.orderDate} onChange={v => setFormData({ ...formData, orderDate: v })} required />
-          <Input label="预计到货日期" type="date" value={formData.expectedDate} onChange={v => setFormData({ ...formData, expectedDate: v })} required />
+          <Input label="数量" type="number" value={formData.quantity} onChange={v => setFormData({ ...formData, quantity: v })} required />
+          <Input label="单价" type="number" value={formData.unitPrice} onChange={v => setFormData({ ...formData, unitPrice: v })} required />
         </div>
         
-        {/* 管理员可以编辑状态 */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <Input label="订单日期" type="date" value={formData.orderDate} onChange={v => setFormData({ ...formData, orderDate: v })} required />
+          <Input label="预计到货" type="date" value={formData.expectedDate} onChange={v => setFormData({ ...formData, expectedDate: v })} required />
+        </div>
+
         {isAdmin && editingOrder && (
-          <Select 
-            label="状态（仅管理员可修改）" 
-            value={formData.status} 
-            onChange={v => setFormData({ ...formData, status: v })} 
-            options={Object.entries(PO_STATUS).map(([k, v]) => ({ value: k, label: v.text }))} 
-          />
+          <Select label="状态（仅管理员可修改）" value={formData.status} onChange={v => setFormData({ ...formData, status: v })} 
+            options={Object.entries(PO_STATUS).map(([k, v]) => ({ value: k, label: v.text }))} />
         )}
-        
-        <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', marginBottom: '16px' }}>
+
+        {/* ✅ 状态流转说明（更新为正确流程） */}
+        <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: '8px', marginTop: '16px' }}>
           <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>状态流转说明</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', flexWrap: 'wrap' }}>
-            <span style={{ padding: '4px 8px', background: '#f1f5f9', color: '#64748b', borderRadius: '4px' }}>草稿</span>
-            <span>→</span>
-            <span style={{ padding: '4px 8px', background: '#dbeafe', color: '#3b82f6', borderRadius: '4px' }}>已确认</span>
-            <span>→</span>
-            <span style={{ padding: '4px 8px', background: '#fef3c7', color: '#f59e0b', borderRadius: '4px' }}>生产中</span>
-            <span>→</span>
-            <span style={{ padding: '4px 8px', background: '#ede9fe', color: '#8b5cf6', borderRadius: '4px' }}>已发货</span>
-            <span>→</span>
+            <span style={{ padding: '4px 8px', background: '#f1f5f9', color: '#64748b', borderRadius: '4px' }}>草稿</span><span>→</span>
+            <span style={{ padding: '4px 8px', background: '#dbeafe', color: '#3b82f6', borderRadius: '4px' }}>已确认</span><span>→</span>
+            <span style={{ padding: '4px 8px', background: '#ede9fe', color: '#8b5cf6', borderRadius: '4px' }}>已发货</span><span>→</span>
             <span style={{ padding: '4px 8px', background: '#d1fae5', color: '#10b981', borderRadius: '4px' }}>已到货</span>
           </div>
-          {!isAdmin && <div style={{ marginTop: '8px', fontSize: '11px', color: '#94a3b8' }}>* 采购员请使用列表中的状态按钮推进订单状态</div>}
         </div>
+
+        <Input label="备注" value={formData.remark} onChange={v => setFormData({ ...formData, remark: v })} placeholder="备注信息..." />
         
-        <div style={{ padding: '12px 16px', background: '#f0fdf4', borderRadius: '8px', marginBottom: '16px' }}>
-          <div style={{ fontSize: '12px', color: '#64748b' }}>订单金额</div>
-          <div style={{ fontSize: '20px', fontWeight: 700, color: '#10b981' }}>¥{(formData.quantity * formData.unitPrice).toLocaleString()}</div>
-        </div>
-        
-        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+        <div style={{ marginTop: '24px', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
           <Button variant="secondary" onClick={() => setShowModal(false)}>取消</Button>
           <Button icon={Save} onClick={handleSubmit}>保存</Button>
         </div>
