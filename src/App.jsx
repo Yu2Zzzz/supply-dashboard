@@ -570,12 +570,17 @@ const ProductDetailPage = memo(({ code, data, onNav, onBack }) => {
 // ============ 物料详情页 ============
 const MaterialDetailPage = memo(({ code, data, onBack }) => {
   const { mats = [], suppliers = [] } = data;
-  const mat = mats.find(m => m.code === code);
   const { token } = useAuth();
 
   const [poList, setPoList] = useState([]);
   const [poLoading, setPoLoading] = useState(false);
   const [poError, setPoError] = useState('');
+
+  // 当前物料
+  const mat = useMemo(
+    () => mats.find(m => m.code === code),
+    [mats, code]
+  );
 
   // 从后端正式采购接口拉采购单，不再用 /api/data 里的 pos
   useEffect(() => {
@@ -586,7 +591,6 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
         setPoLoading(true);
         setPoError('');
 
-        // 先简单拉一批再前端按物料过滤，避免依赖 materialId 是否在 mats 里
         const params = new URLSearchParams({
           page: '1',
           pageSize: '200',
@@ -622,12 +626,35 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
     return <EmptyState icon={Box} title="物料不存在" description="未找到该物料" />;
   }
 
-  const matSuppliers = suppliers.filter(s => s.mat === code);
+  // 供应商列表
+  const matSuppliers = useMemo(
+    () => suppliers.filter(s => s.mat === code),
+    [suppliers, code]
+  );
 
-  // 采购单按物料编码过滤；如果以后 mats 里有 id，也一起兼容
-  const matPOs = poList.filter(po =>
-    po.materialCode === mat.code ||
-    (mat.id && po.materialId === mat.id)
+  // 该物料对应的采购订单
+  const matPOs = useMemo(
+    () =>
+      poList.filter(
+        po =>
+          po.materialCode === mat.code ||
+          (mat.id && po.materialId === mat.id)
+      ),
+    [poList, mat]
+  );
+
+  // ✅ 在途数量：基于采购订单计算，不再用 mat.transit
+  // 这里把「已发货 / 运输中」都算在途，你可以按自己的状态枚举调整
+  const transitQty = useMemo(
+    () =>
+      matPOs
+        .filter(po =>
+          ['shipped', 'in_transit', '已发货', '运输中'].includes(
+            (po.status || '').toLowerCase()
+          )
+        )
+        .reduce((sum, po) => sum + (Number(po.quantity) || 0), 0),
+    [matPOs]
   );
 
   return (
@@ -650,47 +677,125 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
         <ChevronLeft size={20} /> 返回
       </button>
 
+      {/* 头部信息卡片 */}
       <Card style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a', margin: '0 0 8px 0' }}>{mat.name}</h1>
+        <h1
+          style={{
+            fontSize: '24px',
+            fontWeight: 700,
+            color: '#0f172a',
+            margin: '0 0 8px 0'
+          }}
+        >
+          {mat.name}
+        </h1>
         <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>{mat.spec}</p>
-        <div style={{ display: 'flex', gap: '32px', marginTop: '24px', flexWrap: 'wrap' }}>
+
+        <div
+          style={{
+            display: 'flex',
+            gap: '32px',
+            marginTop: '24px',
+            flexWrap: 'wrap'
+          }}
+        >
           <div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>当前库存</div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: mat.inv < mat.safe ? '#dc2626' : '#0f172a' }}>
+            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
+              当前库存
+            </div>
+            <div
+              style={{
+                fontSize: '20px',
+                fontWeight: 700,
+                color: mat.inv < mat.safe ? '#dc2626' : '#0f172a'
+              }}
+            >
               {mat.inv.toLocaleString()}
             </div>
           </div>
+
           <div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>在途数量</div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: '#0f172a' }}>
-              {mat.transit.toLocaleString()}
+            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
+              在途数量
+            </div>
+            <div
+              style={{
+                fontSize: '20px',
+                fontWeight: 700,
+                color: '#0f172a'
+              }}
+            >
+              {transitQty.toLocaleString()}
             </div>
           </div>
+
           <div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>安全库存</div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: '#64748b' }}>
+            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
+              安全库存
+            </div>
+            <div
+              style={{
+                fontSize: '20px',
+                fontWeight: 700,
+                color: '#64748b'
+              }}
+            >
               {mat.safe.toLocaleString()}
             </div>
           </div>
+
           <div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>采购周期</div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: '#64748b' }}>
+            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
+              采购周期
+            </div>
+            <div
+              style={{
+                fontSize: '20px',
+                fontWeight: 700,
+                color: '#64748b'
+              }}
+            >
               {mat.lead}天
             </div>
           </div>
+
           <div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>采购员</div>
-            <div style={{ fontSize: '20px', fontWeight: 700, color: '#3b82f6' }}>
+            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
+              采购员
+            </div>
+            <div
+              style={{
+                fontSize: '20px',
+                fontWeight: 700,
+                color: '#3b82f6'
+              }}
+            >
               {mat.buyer || '-'}
             </div>
           </div>
         </div>
       </Card>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
-        {/* 供应商卡片保持原样 */}
+      {/* 供应商 + 采购订单 两列 */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+          gap: '24px'
+        }}
+      >
+        {/* 供应商卡片 */}
         <Card>
-          <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', margin: '0 0 16px 0' }}>供应商</h2>
+          <h2
+            style={{
+              fontSize: '16px',
+              fontWeight: 700,
+              color: '#0f172a',
+              margin: '0 0 16px 0'
+            }}
+          >
+            供应商
+          </h2>
           {matSuppliers.length === 0 ? (
             <div style={{ color: '#64748b', fontSize: '14px' }}>暂无供应商信息</div>
           ) : (
@@ -705,7 +810,13 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
                     border: s.main ? '2px solid #3b82f6' : '1px solid #e2e8f0'
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}
+                  >
                     <div style={{ fontWeight: 600, color: '#0f172a' }}>{s.name}</div>
                     {s.main && (
                       <span
@@ -722,8 +833,15 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
                       </span>
                     )}
                   </div>
-                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '8px' }}>
-                    准时率: {(s.onTime * 100).toFixed(0)}% | 质量率: {(s.quality * 100).toFixed(0)}%
+                  <div
+                    style={{
+                      fontSize: '12px',
+                      color: '#64748b',
+                      marginTop: '8px'
+                    }}
+                  >
+                    准时率: {(s.onTime * 100).toFixed(0)}% | 质量率:{' '}
+                    {(s.quality * 100).toFixed(0)}%
                   </div>
                 </div>
               ))}
@@ -731,9 +849,18 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
           )}
         </Card>
 
-        {/* 采购订单卡片改为使用 matPOs */}
+        {/* 采购订单卡片 */}
         <Card>
-          <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', margin: '0 0 16px 0' }}>采购订单</h2>
+          <h2
+            style={{
+              fontSize: '16px',
+              fontWeight: 700,
+              color: '#0f172a',
+              margin: '0 0 16px 0'
+            }}
+          >
+            采购订单
+          </h2>
 
           {poLoading && (
             <div style={{ color: '#64748b', fontSize: '14px' }}>正在加载采购订单...</div>
@@ -762,11 +889,18 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
                   }}
                 >
                   <div>
-                    <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px' }}>
+                    <div
+                      style={{
+                        fontWeight: 600,
+                        color: '#0f172a',
+                        fontSize: '13px'
+                      }}
+                    >
                       {po.poNo}
                     </div>
                     <div style={{ fontSize: '11px', color: '#64748b' }}>
-                      {po.supplierName} | {Number(po.quantity || 0).toLocaleString()} {po.unit || ''}
+                      {po.supplierName} | {Number(po.quantity || 0).toLocaleString()}{' '}
+                      {po.unit || ''}
                     </div>
                   </div>
                   <div style={{ fontSize: '12px', color: '#64748b' }}>
@@ -781,7 +915,6 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
     </div>
   );
 });
-
 
 // ============ 预警页面 ============
 const WarningsPage = memo(({ data }) => {
