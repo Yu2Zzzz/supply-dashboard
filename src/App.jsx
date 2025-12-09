@@ -497,71 +497,191 @@ const DashboardPage = memo(({ data, onNav }) => {
   );
 });
 
-// ============ 订单详情页 ============
+// ============ 订单详情页 - 完全重写（使用真实API） ============
 const OrderDetailPage = memo(({ id, data, onNav, onBack }) => {
-  const { orders = [], orderLines = [], products = [], bom = [], mats = [], suppliers = [] } = data;
+  const { orders = [], suppliers = [] } = data;
   const { token } = useAuth();
   const order = orders.find(o => o.id === id);
   
-  // ✅ 修复：获取真实采购订单数据
+  // 状态管理
+  const [orderLines, setOrderLines] = useState([]);
+  const [productDataWithRisk, setProductDataWithRisk] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [poList, setPoList] = useState([]);
-  const [poLoading, setPoLoading] = useState(false);
   
+  // ✅ 关键修复：对每个产品获取真实BOM和计算风险
   useEffect(() => {
-    if (!token) return;
+    if (!token || !order) return;
     
-    const fetchPOs = async () => {
+    const fetchCompleteOrderData = async () => {
       try {
-        setPoLoading(true);
-        const params = new URLSearchParams({ page: '1', pageSize: '200' });
-        const res = await fetch(`${BASE_URL}/api/purchase-orders?${params.toString()}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        });
+        setLoading(true);
         
-        const json = await res.json();
-        if (json.success) {
-          setPoList(json.data?.list || json.data || []);
+        // 1. 获取订单详情（包含产品列表）
+        const orderRes = await fetch(`${BASE_URL}/api/sales-orders/${id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const orderData = await orderRes.json();
+        
+        if (!orderData.success) {
+          console.error('获取订单失败');
+          setLoading(false);
+          return;
         }
-      } catch (err) {
-        console.error('获取采购订单失败:', err);
-      } finally {
-        setPoLoading(false);
+        
+        const lines = orderData.data?.lines || [];
+        setOrderLines(lines);
+        
+        // 2. 获取所有采购订单
+        const poRes = await fetch(`${BASE_URL}/api/purchase-orders?page=1&pageSize=200`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const poData = await poRes.json();
+        const purchaseOrders = poData.success ? (poData.data?.list || []) : [];
+        setPoList(purchaseOrders);
+        
+        // 3. 获取所有物料数据
+        const materialsRes = await fetch(`${BASE_URL}/api/materials`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const materialsData = await materialsRes.json();
+        const allMaterials = materialsData.success ? (materialsData.data?.list || materialsData.data || []) : [];
+        
+        // 4. 为每个产品获取BOM并计算风险
+        const productsWithRisk = await Promise.all(
+          lines.map(async (line) => {
+            try {
+              // 获取产品BOM
+              const prodRes = await fetch(`${BASE_URL}/api/products/${line.productId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+              });
+              const prodData = await prodRes.json();
+              
+              if (!prodData.success) {
+                return {
+                  ...line,
+                  bomItems: [],
+                  materialRisks: [],
+                  overallRisk: 'ongoing'
+                };
+              }
+              
+              const bomItems = prodData.data?.bomItems || [];
+              
+              // 计算每个BOM物料的风险
+              const materialRisks = bomItems.map(bomItem => {
+                // 找到物料数据
+                const material = allMaterials.find(m => m.id === bomItem.materialId);
+                if (!material) return null;
+                
+                const demand = bomItem.quantity * line.quantity;
+                
+                // 该物料的采购订单
+                const matPOs = purchaseOrders.filter(po => 
+                  po.materialId === material.id || po.materialCode === (material.materialCode || material.material_code)
+                );
+                
+                // 计算库存和在途
+                const currentStock = material.stock || 0;
+                const inTransit = matPOs
+                  .filter(po => po.status === 'producing' || po.status === 'shipped')
+                  .reduce((sum, po) => sum + (Number(po.quantity) || 0), 0);
+                
+                const available = currentStock + inTransit;
+                const gap = Math.max(0, demand - available);
+                const daysLeft = daysDiff(order.deliveryDate, TODAY);
+                
+                // 检查采购是否延迟
+                let hasDelayedPO = false;
+                let maxDelay = 0;
+                matPOs.forEach(po => {
+                  const expectedDate = po.expectedDate || po.orderDate;
+                  if (expectedDate) {
+                    const delay = daysDiff(expectedDate, order.deliveryDate);
+                    if (delay > 0) {
+                      hasDelayedPO = true;
+                      maxDelay = Math.max(maxDelay, delay);
+                    }
+                  }
+                });
+                
+                // ✅ 优化的风险等级判断
+                let level = 'ongoing';
+                
+                if (daysLeft < 0 && gap > 0) {
+                  // 订单已逾期且库存不足
+                  level = 'overdue';
+                } else if (hasDelayedPO && gap > 0 && daysLeft < 14) {
+                  // 采购延迟且库存不足且交期临近
+                  level = 'overdue';
+                } else if (inTransit === 0 && gap > 0 && daysLeft < 30) {
+                  // 没有在途采购，有缺口
+                  level = 'pending';
+                } else if (gap > 0 && daysLeft < 7) {
+                  // 7天内交付且有缺口
+                  level = 'urgent';
+                } else if (gap > demand * 0.3) {
+                  // 缺口超过30%
+                  level = 'warning';
+                } else if (currentStock < (material.safeStock || material.safe_stock || 100)) {
+                  // 库存低于安全库存但够用
+                  level = 'warning';
+                }
+                
+                return {
+                  materialId: bomItem.materialId,
+                  materialCode: material.materialCode || material.material_code,
+                  materialName: bomItem.materialName || material.name,
+                  unitUsage: bomItem.quantity,
+                  demand,
+                  currentStock,
+                  inTransit,
+                  available,
+                  gap,
+                  daysLeft,
+                  hasDelayedPO,
+                  maxDelay,
+                  level
+                };
+              }).filter(Boolean);
+              
+              // 产品风险 = 所有物料的最高风险
+              const productRisk = materialRisks.length > 0 
+                ? highestRisk(materialRisks.map(r => r.level))
+                : 'ongoing';
+              
+              return {
+                ...line,
+                bomItems,
+                materialRisks,
+                overallRisk: productRisk
+              };
+              
+            } catch (error) {
+              console.error('获取产品BOM失败:', line.productName, error);
+              return {
+                ...line,
+                bomItems: [],
+                materialRisks: [],
+                overallRisk: 'ongoing'
+              };
+            }
+          })
+        );
+        
+        setProductDataWithRisk(productsWithRisk);
+        setLoading(false);
+        
+      } catch (error) {
+        console.error('获取订单数据失败:', error);
+        setLoading(false);
       }
     };
     
-    fetchPOs();
-  }, [token]);
-  
-  // ✅ 转换真实采购订单为风险计算器格式
-  const poPos = useMemo(() => 
-    poList.map(po => ({
-      mat: po.materialCode,
-      qty: Number(po.quantity) || 0,
-      date: (po.expectedDate || po.orderDate || '').split('T')[0],
-      status: po.status,
-      supplier: po.supplierName,
-    })),
-    [poList]
-  );
-  
-  // ✅ 使用真实采购订单创建风险计算器
-  const calcRisk = useMemo(() => createRiskCalculator(mats, poPos, suppliers), [mats, poPos, suppliers]);
+    fetchCompleteOrderData();
+  }, [id, token, order]);
   
   if (!order) return <EmptyState icon={Package} title="订单不存在" description="未找到该订单" />;
-
-  const lines = orderLines.filter(l => l.orderId === id);
-  const productData = lines.map(line => {
-    const prodBom = bom.filter(b => b.p === line.productCode);
-    const matRisks = prodBom.map(b => {
-      const risk = calcRisk(b.m, b.c * line.qty, order.deliveryDate);
-      return risk ? { ...risk, bomQty: b.c } : null;
-    }).filter(Boolean);
-    return { ...line, matRisks, overallRisk: highestRisk(matRisks.map(r => r.level)) };
-  });
 
   return (
     <div>
@@ -575,54 +695,80 @@ const OrderDetailPage = memo(({ id, data, onNav, onBack }) => {
             <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a', margin: '0 0 8px 0' }}>订单 {order.id}</h1>
             <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>{order.customer}</p>
           </div>
-          <StatusBadge level={highestRisk(productData.map(p => p.overallRisk))} />
+          <StatusBadge level={orderOverallRisk} />
         </div>
         <div style={{ display: 'flex', gap: '32px', marginTop: '24px', flexWrap: 'wrap' }}>
-  <div>
-    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>下单日期</div>
-    <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>
-      {order.orderDate ? formatDate(order.orderDate) : '-'}
-    </div>
-  </div>
-  <div>
-    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>交付日期</div>
-    <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>
-      {order.deliveryDate ? formatDate(order.deliveryDate) : '-'}
-    </div>
-  </div>
-  <div>
-    <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>业务员</div>
-    <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>
-      {order.salesPerson || '-'}
-    </div>
-  </div>
-</div>
-
+          <div>
+            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>下单日期</div>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>
+              {order.orderDate ? formatDate(order.orderDate) : '-'}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>交付日期</div>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>
+              {order.deliveryDate ? formatDate(order.deliveryDate) : '-'}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>业务员</div>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>
+              {order.salesPerson || '-'}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>距离交付</div>
+            <div style={{ fontSize: '14px', fontWeight: 600, color: daysDiff(order.deliveryDate, TODAY) < 0 ? '#ef4444' : '#10b981' }}>
+              {daysDiff(order.deliveryDate, TODAY) >= 0 ? `${daysDiff(order.deliveryDate, TODAY)} 天` : `逾期 ${Math.abs(daysDiff(order.deliveryDate, TODAY))} 天`}
+            </div>
+          </div>
+        </div>
       </Card>
 
       <Card>
         <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', margin: '0 0 20px 0' }}>产品清单</h2>
-        {poLoading && (
-          <div style={{ padding: '12px', background: '#eff6ff', borderRadius: '8px', marginBottom: '16px', fontSize: '13px', color: '#1e40af' }}>
-            ⏳ 正在加载采购订单数据，计算准确风险...
+        {loading ? (
+          <div style={{ padding: '48px', textAlign: 'center', color: '#64748b' }}>
+            <div style={{ width: '48px', height: '48px', margin: '0 auto 16px', border: '4px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+            正在加载产品BOM数据，计算准确风险...
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {productDataWithRisk.map((prod, idx) => (
+              <div key={idx} style={{ padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <div>
+                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{prod.productName}</div>
+                    <div style={{ fontSize: '12px', color: '#64748b' }}>数量: {prod.quantity?.toLocaleString() || 0}</div>
+                  </div>
+                  <StatusBadge level={prod.overallRisk} size="sm" />
+                </div>
+                
+                {/* BOM物料风险详情 */}
+                {prod.materialRisks && prod.materialRisks.length > 0 && (
+                  <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', marginBottom: '8px' }}>
+                      BOM物料状态 ({prod.materialRisks.length}个)
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {prod.materialRisks.map((mat, midx) => (
+                        <div key={midx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#fff', borderRadius: '6px', fontSize: '12px' }}>
+                          <span style={{ color: '#374151', fontWeight: 500 }}>{mat.materialName}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{ color: '#64748b', fontSize: '11px' }}>
+                              库存:{mat.currentStock} | 在途:{mat.inTransit}
+                            </span>
+                            <StatusBadge level={mat.level} size="sm" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         )}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {productData.map((prod, idx) => (
-            <div key={idx} onClick={() => onNav('product-detail', prod.productCode)} style={{ padding: '16px', background: '#f8fafc', borderRadius: '12px', cursor: 'pointer', border: '1px solid #e2e8f0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{prod.productName}</div>
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>数量: {prod.qty.toLocaleString()}</div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <StatusBadge level={prod.overallRisk} size="sm" />
-                  <ChevronRight size={16} style={{ color: '#94a3b8' }} />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
       </Card>
     </div>
   );
@@ -818,7 +964,7 @@ const ProductDetailPage = memo(({ code, data, onNav, onBack }) => {
             </thead>
             <tbody>
               {matRisks.map((mat, idx) => (
-                <TableRow key={idx} onClick={() => onNav('material-detail', mat.code)}>
+                <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
                   <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>
                     {mat.name}
                   </td>
@@ -830,7 +976,8 @@ const ProductDetailPage = memo(({ code, data, onNav, onBack }) => {
                       padding: '16px',
                       textAlign: 'center',
                       fontSize: '14px',
-                      color: mat.inv < mat.safe ? '#dc2626' : '#374151'
+                      fontWeight: 600,
+                      color: mat.inv < mat.safe ? '#dc2626' : '#10b981'
                     }}
                   >
                     {mat.inv.toLocaleString()}
@@ -840,7 +987,8 @@ const ProductDetailPage = memo(({ code, data, onNav, onBack }) => {
                       padding: '16px',
                       textAlign: 'center',
                       fontSize: '14px',
-                      color: '#374151'
+                      fontWeight: 600,
+                      color: mat.transit > 0 ? '#3b82f6' : '#64748b'
                     }}
                   >
                     {mat.transit.toLocaleString()}
@@ -848,7 +996,7 @@ const ProductDetailPage = memo(({ code, data, onNav, onBack }) => {
                   <td style={{ padding: '16px', textAlign: 'center' }}>
                     <StatusBadge level={mat.level} size="sm" />
                   </td>
-                </TableRow>
+                </tr>
               ))}
             </tbody>
           </table>
