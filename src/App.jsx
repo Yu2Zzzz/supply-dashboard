@@ -512,32 +512,182 @@ const OrderDetailPage = memo(({ id, data, onNav, onBack }) => {
 });
 
 // ============ 产品详情页 ============
+// ============ 产品详情页（修正 BOM 在途数量） ============
 const ProductDetailPage = memo(({ code, data, onNav, onBack }) => {
-  const { products = [], bom = [], mats = [], suppliers = [], pos = [] } = data;
-  const product = products.find(p => p.code === code);
-  const calcRisk = useMemo(() => createRiskCalculator(mats, pos, suppliers), [mats, pos, suppliers]);
-  
-  if (!product) return <EmptyState icon={Package} title="产品不存在" description="未找到该产品" />;
+  const { products = [], bom = [], mats = [], suppliers = [] } = data;
+  const { token } = useAuth();
 
-  const prodBom = bom.filter(b => b.p === code);
-  const matRisks = prodBom.map(b => {
-    const risk = calcRisk(b.m, b.c * 1000, new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
-    return risk ? { ...risk, bomQty: b.c } : null;
-  }).filter(Boolean);
+  const [poList, setPoList] = useState([]);
+  const [poLoading, setPoLoading] = useState(false);
+  const [poError, setPoError] = useState('');
+
+  // 当前产品
+  const product = useMemo(
+    () => products.find(p => p.code === code),
+    [products, code]
+  );
+
+  // 拉正式采购订单列表，用它来算在途
+  useEffect(() => {
+    if (!token) return;
+
+    const fetchPOs = async () => {
+      try {
+        setPoLoading(true);
+        setPoError('');
+
+        const params = new URLSearchParams({
+          page: '1',
+          pageSize: '200',
+        });
+
+        const res = await fetch(`${BASE_URL}/api/purchase-orders?${params.toString()}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+        });
+
+        const json = await res.json();
+        if (!json.success) {
+          throw new Error(json.message || '获取采购订单失败');
+        }
+
+        const list = json.data?.list || json.data || [];
+        setPoList(list);
+      } catch (err) {
+        console.error('获取采购订单失败:', err);
+        setPoError(err.message || '获取采购订单失败');
+      } finally {
+        setPoLoading(false);
+      }
+    };
+
+    fetchPOs();
+  }, [token]);
+
+  if (!product) {
+    return <EmptyState icon={Package} title="产品不存在" description="未找到该产品" />;
+  }
+
+  // 该产品的 BOM
+  const prodBom = useMemo(
+    () => bom.filter(b => b.p === code),
+    [bom, code]
+  );
+
+  // 把采购订单转成类似原来 pos 的结构，给风险计算器用
+  const poPos = useMemo(
+    () =>
+      poList.map(po => ({
+        mat: po.materialCode,                          // 物料编码
+        qty: Number(po.quantity) || 0,                 // 数量
+        expectedDate: (po.expectedDate || po.orderDate || '').split('T')[0],
+        status: po.status,
+        supplier: po.supplierName,
+      })),
+    [poList]
+  );
+
+  // 每个物料的在途数量 map，方便直接覆盖 transit
+  const transitMap = useMemo(() => {
+    const map = {};
+    poPos.forEach(p => {
+      if (!p.mat) return;
+      map[p.mat] = (map[p.mat] || 0) + (p.qty || 0);
+    });
+    return map;
+  }, [poPos]);
+
+  // 用“采购订单版 pos” 计算风险
+  const calcRisk = useMemo(
+    () => createRiskCalculator(mats, poPos, suppliers),
+    [mats, poPos, suppliers]
+  );
+
+  const matRisks = useMemo(
+    () =>
+      prodBom
+        .map(b => {
+          const targetDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+            .toISOString()
+            .split('T')[0];
+          const risk = calcRisk(b.m, b.c * 1000, targetDate);
+          if (!risk) return null;
+
+          // ✅ 在这里用 transitMap 覆盖 risk.transit，保证在途数量等于真实采购在途
+          const transit = transitMap[b.m] ?? risk.transit ?? 0;
+
+          return {
+            ...risk,
+            transit,
+            bomQty: b.c,
+          };
+        })
+        .filter(Boolean),
+    [prodBom, calcRisk, transitMap]
+  );
 
   return (
     <div>
-      <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: '#64748b', marginBottom: '24px', padding: 0 }}>
+      <button
+        onClick={onBack}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          fontSize: '14px',
+          color: '#64748b',
+          marginBottom: '24px',
+          padding: 0
+        }}
+      >
         <ChevronLeft size={20} /> 返回
       </button>
 
       <Card style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a', margin: '0 0 8px 0' }}>{product.name}</h1>
-        <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>产品编码: {product.code}</p>
+        <h1
+          style={{
+            fontSize: '24px',
+            fontWeight: 700,
+            color: '#0f172a',
+            margin: '0 0 8px 0'
+          }}
+        >
+          {product.name}
+        </h1>
+        <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>
+          产品编码: {product.code}
+        </p>
       </Card>
 
       <Card>
-        <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', margin: '0 0 20px 0' }}>BOM 物料清单</h2>
+        <h2
+          style={{
+            fontSize: '16px',
+            fontWeight: 700,
+            color: '#0f172a',
+            margin: '0 0 20px 0'
+          }}
+        >
+          BOM 物料清单
+        </h2>
+
+        {poLoading && (
+          <div style={{ color: '#64748b', fontSize: '14px', marginBottom: '8px' }}>
+            正在加载采购订单，用于计算在途数量…
+          </div>
+        )}
+        {poError && (
+          <div style={{ color: '#ef4444', fontSize: '14px', marginBottom: '8px' }}>
+            {poError}
+          </div>
+        )}
+
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -552,11 +702,35 @@ const ProductDetailPage = memo(({ code, data, onNav, onBack }) => {
             <tbody>
               {matRisks.map((mat, idx) => (
                 <TableRow key={idx} onClick={() => onNav('material-detail', mat.code)}>
-                  <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{mat.name}</td>
-                  <td style={{ padding: '16px', textAlign: 'center', fontSize: '14px', color: '#64748b' }}>{mat.bomQty}</td>
-                  <td style={{ padding: '16px', textAlign: 'center', fontSize: '14px', color: mat.inv < mat.safe ? '#dc2626' : '#374151' }}>{mat.inv.toLocaleString()}</td>
-                  <td style={{ padding: '16px', textAlign: 'center', fontSize: '14px', color: '#374151' }}>{mat.transit.toLocaleString()}</td>
-                  <td style={{ padding: '16px', textAlign: 'center' }}><StatusBadge level={mat.level} size="sm" /></td>
+                  <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>
+                    {mat.name}
+                  </td>
+                  <td style={{ padding: '16px', textAlign: 'center', fontSize: '14px', color: '#64748b' }}>
+                    {mat.bomQty}
+                  </td>
+                  <td
+                    style={{
+                      padding: '16px',
+                      textAlign: 'center',
+                      fontSize: '14px',
+                      color: mat.inv < mat.safe ? '#dc2626' : '#374151'
+                    }}
+                  >
+                    {mat.inv.toLocaleString()}
+                  </td>
+                  <td
+                    style={{
+                      padding: '16px',
+                      textAlign: 'center',
+                      fontSize: '14px',
+                      color: '#374151'
+                    }}
+                  >
+                    {mat.transit.toLocaleString()}
+                  </td>
+                  <td style={{ padding: '16px', textAlign: 'center' }}>
+                    <StatusBadge level={mat.level} size="sm" />
+                  </td>
                 </TableRow>
               ))}
             </tbody>
