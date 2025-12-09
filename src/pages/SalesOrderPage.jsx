@@ -308,7 +308,7 @@ const SalesOrderPage = memo(() => {
               style={{ width: '100%', padding: '12px 14px 12px 42px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', boxSizing: 'border-box' }} />
           </div>
           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-            {['all', 'pending', 'confirmed', 'processing', 'shipped', 'completed'].map(status => (
+            {['all', 'pending', 'confirmed', 'producing', 'shipped', 'completed'].map(status => (
               <button key={status} onClick={() => setStatusFilter(status)} style={{
                 padding: '10px 16px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px',
                 background: statusFilter === status ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : '#f1f5f9',
