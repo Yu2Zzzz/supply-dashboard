@@ -568,17 +568,86 @@ const ProductDetailPage = memo(({ code, data, onNav, onBack }) => {
 });
 
 // ============ 物料详情页 ============
+// ============ 物料详情页 ============
 const MaterialDetailPage = memo(({ code, data, onBack }) => {
-  const { mats = [], suppliers = [], pos = [] } = data;
+  const { mats = [], suppliers = [] } = data;
   const mat = mats.find(m => m.code === code);
-  if (!mat) return <EmptyState icon={Box} title="物料不存在" description="未找到该物料" />;
+  const { token } = useAuth();
+
+  const [poList, setPoList] = useState([]);
+  const [poLoading, setPoLoading] = useState(false);
+  const [poError, setPoError] = useState('');
+
+  // 从后端正式采购接口拉采购单，不再用 /api/data 里的 pos
+  useEffect(() => {
+    if (!token) return;
+
+    const fetchPOs = async () => {
+      try {
+        setPoLoading(true);
+        setPoError('');
+
+        // 先简单拉一批再前端按物料过滤，避免依赖 materialId 是否在 mats 里
+        const params = new URLSearchParams({
+          page: '1',
+          pageSize: '200',
+        });
+
+        const res = await fetch(`${BASE_URL}/api/purchase-orders?${params.toString()}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+        });
+
+        const json = await res.json();
+        if (!json.success) {
+          throw new Error(json.message || '获取采购订单失败');
+        }
+
+        const list = json.data?.list || json.data || [];
+        setPoList(list);
+      } catch (err) {
+        console.error('获取采购订单失败:', err);
+        setPoError(err.message || '获取采购订单失败');
+      } finally {
+        setPoLoading(false);
+      }
+    };
+
+    fetchPOs();
+  }, [token]);
+
+  if (!mat) {
+    return <EmptyState icon={Box} title="物料不存在" description="未找到该物料" />;
+  }
 
   const matSuppliers = suppliers.filter(s => s.mat === code);
-  const matPOs = pos.filter(p => p.mat === code);
+
+  // 采购单按物料编码过滤；如果以后 mats 里有 id，也一起兼容
+  const matPOs = poList.filter(po =>
+    po.materialCode === mat.code ||
+    (mat.id && po.materialId === mat.id)
+  );
 
   return (
     <div>
-      <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: '#64748b', marginBottom: '24px', padding: 0 }}>
+      <button
+        onClick={onBack}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          fontSize: '14px',
+          color: '#64748b',
+          marginBottom: '24px',
+          padding: 0
+        }}
+      >
         <ChevronLeft size={20} /> 返回
       </button>
 
@@ -586,43 +655,124 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
         <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a', margin: '0 0 8px 0' }}>{mat.name}</h1>
         <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>{mat.spec}</p>
         <div style={{ display: 'flex', gap: '32px', marginTop: '24px', flexWrap: 'wrap' }}>
-          <div><div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>当前库存</div><div style={{ fontSize: '20px', fontWeight: 700, color: mat.inv < mat.safe ? '#dc2626' : '#0f172a' }}>{mat.inv.toLocaleString()}</div></div>
-          <div><div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>在途数量</div><div style={{ fontSize: '20px', fontWeight: 700, color: '#0f172a' }}>{mat.transit.toLocaleString()}</div></div>
-          <div><div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>安全库存</div><div style={{ fontSize: '20px', fontWeight: 700, color: '#64748b' }}>{mat.safe.toLocaleString()}</div></div>
-          <div><div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>采购周期</div><div style={{ fontSize: '20px', fontWeight: 700, color: '#64748b' }}>{mat.lead}天</div></div>
-          <div><div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>采购员</div><div style={{ fontSize: '20px', fontWeight: 700, color: '#3b82f6' }}>{mat.buyer || '-'}</div></div>
+          <div>
+            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>当前库存</div>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: mat.inv < mat.safe ? '#dc2626' : '#0f172a' }}>
+              {mat.inv.toLocaleString()}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>在途数量</div>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: '#0f172a' }}>
+              {mat.transit.toLocaleString()}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>安全库存</div>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: '#64748b' }}>
+              {mat.safe.toLocaleString()}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>采购周期</div>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: '#64748b' }}>
+              {mat.lead}天
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>采购员</div>
+            <div style={{ fontSize: '20px', fontWeight: 700, color: '#3b82f6' }}>
+              {mat.buyer || '-'}
+            </div>
+          </div>
         </div>
       </Card>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
+        {/* 供应商卡片保持原样 */}
         <Card>
           <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', margin: '0 0 16px 0' }}>供应商</h2>
-          {matSuppliers.length === 0 ? <div style={{ color: '#64748b', fontSize: '14px' }}>暂无供应商信息</div> : (
+          {matSuppliers.length === 0 ? (
+            <div style={{ color: '#64748b', fontSize: '14px' }}>暂无供应商信息</div>
+          ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {matSuppliers.map((s, idx) => (
-                <div key={idx} style={{ padding: '12px', background: '#f8fafc', borderRadius: '8px', border: s.main ? '2px solid #3b82f6' : '1px solid #e2e8f0' }}>
+                <div
+                  key={idx}
+                  style={{
+                    padding: '12px',
+                    background: '#f8fafc',
+                    borderRadius: '8px',
+                    border: s.main ? '2px solid #3b82f6' : '1px solid #e2e8f0'
+                  }}
+                >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ fontWeight: 600, color: '#0f172a' }}>{s.name}</div>
-                    {s.main && <span style={{ fontSize: '10px', fontWeight: 600, color: '#3b82f6', background: '#eff6ff', padding: '2px 8px', borderRadius: '4px' }}>主供应商</span>}
+                    {s.main && (
+                      <span
+                        style={{
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          color: '#3b82f6',
+                          background: '#eff6ff',
+                          padding: '2px 8px',
+                          borderRadius: '4px'
+                        }}
+                      >
+                        主供应商
+                      </span>
+                    )}
                   </div>
-                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '8px' }}>准时率: {(s.onTime * 100).toFixed(0)}% | 质量率: {(s.quality * 100).toFixed(0)}%</div>
+                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '8px' }}>
+                    准时率: {(s.onTime * 100).toFixed(0)}% | 质量率: {(s.quality * 100).toFixed(0)}%
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </Card>
 
+        {/* 采购订单卡片改为使用 matPOs */}
         <Card>
           <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', margin: '0 0 16px 0' }}>采购订单</h2>
-          {matPOs.length === 0 ? <div style={{ color: '#64748b', fontSize: '14px' }}>暂无采购订单</div> : (
+
+          {poLoading && (
+            <div style={{ color: '#64748b', fontSize: '14px' }}>正在加载采购订单...</div>
+          )}
+
+          {poError && (
+            <div style={{ color: '#ef4444', fontSize: '14px' }}>{poError}</div>
+          )}
+
+          {!poLoading && !poError && matPOs.length === 0 && (
+            <div style={{ color: '#64748b', fontSize: '14px' }}>暂无采购订单</div>
+          )}
+
+          {!poLoading && !poError && matPOs.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {matPOs.map((po, idx) => (
-                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>
+              {matPOs.map((po) => (
+                <div
+                  key={po.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '12px',
+                    background: '#f8fafc',
+                    borderRadius: '8px'
+                  }}
+                >
                   <div>
-                    <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px' }}>{po.po}</div>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>{po.supplier} | {po.qty.toLocaleString()}</div>
+                    <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '13px' }}>
+                      {po.poNo}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>
+                      {po.supplierName} | {Number(po.quantity || 0).toLocaleString()} {po.unit || ''}
+                    </div>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#64748b' }}>{formatDate(po.date)}</div>
+                  <div style={{ fontSize: '12px', color: '#64748b' }}>
+                    {formatDate(po.expectedDate || po.orderDate)}
+                  </div>
                 </div>
               ))}
             </div>
@@ -632,6 +782,7 @@ const MaterialDetailPage = memo(({ code, data, onBack }) => {
     </div>
   );
 });
+
 
 // ============ 预警页面 ============
 const WarningsPage = memo(({ data }) => {
@@ -962,7 +1113,7 @@ const MainApp = () => {
         Card={Card} 
         EmptyState={EmptyState} 
         LoadingScreen={LoadingScreen} 
-        tatusTag={StatusTag} 
+        StatusTag={StatusTag} 
       />;
       default: return <DashboardPage data={sharedData} onNav={navigate} />;
     }
