@@ -1,11 +1,11 @@
-// src/config/constants.js - 修复版状态流程
+// src/config/constants.js - 修复版
 import { CheckCircle, AlertTriangle, XCircle, Clock } from 'lucide-react';
 
-export const BASE_URL = 'https://supply-backend-production.up.railway.app';
+// ✅ 从环境变量读取，支持本地开发和生产部署
+export const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
-// 风险等级（要和 createRiskCalculator 里的 level 对得上）
+// 风险等级
 export const RISK = {
-  // 正常 / 安全
   ongoing: {
     text: '正常',
     color: '#10b981',
@@ -13,7 +13,6 @@ export const RISK = {
     icon: CheckCircle,
     priority: 1,
   },
-  // 库存吃紧、需要关注
   warning: {
     text: '预警',
     color: '#f97316',
@@ -21,7 +20,6 @@ export const RISK = {
     icon: AlertTriangle,
     priority: 2,
   },
-  // 严重缺料 / 高风险
   urgent: {
     text: '紧急',
     color: '#ef4444',
@@ -29,7 +27,6 @@ export const RISK = {
     icon: XCircle,
     priority: 3,
   },
-  // 交期已经被采购 /生产拖延
   overdue: {
     text: '逾期',
     color: '#7c3aed',
@@ -37,7 +34,6 @@ export const RISK = {
     icon: AlertTriangle,
     priority: 3,
   },
-  // 没有任何采购在途但有缺口 -> 需要立刻下单
   pending: {
     text: '待计划',
     color: '#64748b',
@@ -47,7 +43,7 @@ export const RISK = {
   },
 };
 
-// ✅ 采购订单状态：草稿 → 已确认 → 已发货 → 已到货（去掉生产中）
+// 采购订单状态
 export const PO_STATUS = {
   draft: { 
     text: '草稿', 
@@ -75,7 +71,7 @@ export const PO_STATUS = {
   }
 };
 
-// ✅ 业务订单状态：待确认 → 已确认 → 生产中 → 已发货 → 已交付
+// 业务订单状态
 export const SO_STATUS = {
   pending: { 
     text: '待确认', 
@@ -107,7 +103,7 @@ export const SO_STATUS = {
     bgColor: '#d1fae5',
     next: null
   },
-   overdue: { 
+  overdue: { 
     text: '逾期',
     color: '#7c3aed',
     bgColor: '#ede9fe',

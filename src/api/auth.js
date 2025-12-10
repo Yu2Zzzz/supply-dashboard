@@ -2,11 +2,17 @@
 import apiClient from './client';
 
 export const authApi = {
-  getList: (params) => apiClient.get('/auth', { params }),
-  getDetail: (id) => apiClient.get('/auth/' + id),
-  create: (data) => apiClient.post('/auth', data),
-  update: (id, data) => apiClient.put('/auth/' + id, data),
-  delete: (id) => apiClient.delete('/auth/' + id),
+  // 登录
+  login: (username, password) => 
+    apiClient.post('/auth/login', { username, password }),
+  
+  // 获取当前用户
+  getCurrentUser: () => 
+    apiClient.get('/auth/me'),
+  
+  // 修改密码
+  changePassword: (oldPassword, newPassword) => 
+    apiClient.post('/auth/change-password', { oldPassword, newPassword }),
 };
 
 export default authApi;
