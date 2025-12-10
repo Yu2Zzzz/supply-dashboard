@@ -301,7 +301,7 @@ const Sidebar = memo(({ currentPage, onNavigate, collapsed, onToggle }) => {
     { key: 'users', label: '用户管理', icon: Users, roles: ['admin'] },
   ];
 
-  const visibleItems = menuItems.filter(item => hasRole(item.roles));
+  const visibleItems = !user ? menuItems : menuItems.filter(item => hasRole(item.roles));
   const getRoleName = (role) => {
     if (!role) return '未知';
     if (typeof role === 'object') return role.name || role.code || '未知';
