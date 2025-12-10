@@ -1,7 +1,7 @@
 // src/hooks/useApi.js
 import { useCallback } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { BASE_URL } from '../config/constants';
+import { useAuth } from "@/contexts/AuthContext";
+import { BASE_URL } from "@/config/constants";
 
 export const useApi = () => {
   const { token, logout } = useAuth();

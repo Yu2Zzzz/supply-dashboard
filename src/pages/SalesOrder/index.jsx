@@ -1,10 +1,10 @@
 // src/pages/SalesOrderPage.jsx - 修复版（新增客户+状态按钮优化）
 import React, { memo, useState, useCallback, useEffect } from 'react';
 import { Plus, Search, RefreshCw, Edit, Trash2, Save, FileText, ArrowRight, Package, X, UserPlus } from 'lucide-react';
-import { useApi } from '../hooks/useApi';
-import { useAuth } from '../contexts/AuthContext';
-import { SO_STATUS } from '../config/constants';
-import { formatDate, formatDateInput } from '../utils/helpers';
+import { useApi } from "@/hooks/useApi";
+import { useAuth } from "@/contexts/AuthContext";
+import { SO_STATUS } from "@/config/constants";
+import { formatDate, formatDateInput } from "@/utils/helpers";
 
 // ============ 内置 UI 组件 ============
 const Card = memo(({ children, style = {} }) => (

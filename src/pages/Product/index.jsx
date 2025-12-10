@@ -1,8 +1,8 @@
 // src/pages/ProductManagementPage.jsx - 修复版（BOM显示+库存API修复）
 import React, { memo, useState, useCallback, useEffect } from 'react';
 import { Package, Plus, Search, RefreshCw, Edit, Trash2, Save, X, Box, Settings, Warehouse, AlertTriangle, CheckCircle } from 'lucide-react';
-import { useApi } from '../hooks/useApi';
-import { useAuth } from '../contexts/AuthContext';
+import { useApi } from "@/hooks/useApi";
+import { useAuth } from "@/contexts/AuthContext";
 
 // ============ 内置 UI 组件 ============
 const Card = memo(({ children, style = {} }) => (

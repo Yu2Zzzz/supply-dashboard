@@ -1,10 +1,10 @@
 // src/pages/PurchaseOrderPage.jsx - 修复版（添加关联销售订单）
 import React, { memo, useState, useCallback, useEffect } from 'react';
 import { Plus, Search, RefreshCw, Edit, Trash2, Save, ShoppingCart, ArrowRight, X, FileText } from 'lucide-react';
-import { useApi } from '../hooks/useApi';
-import { useAuth } from '../contexts/AuthContext';
-import { PO_STATUS } from '../config/constants';
-import { formatDate, formatDateInput } from '../utils/helpers';
+import { useApi } from "@/hooks/useApi";
+import { useAuth } from "@/contexts/AuthContext";
+import { PO_STATUS } from "@/config/constants";
+import { formatDate, formatDateInput } from "@/utils/helpers";
 
 // ============ 内置 UI 组件 ============
 const Card = memo(({ children, style = {} }) => (

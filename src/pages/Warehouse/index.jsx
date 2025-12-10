@@ -1,8 +1,8 @@
 // src/pages/WarehouseManagementPage.jsx - 修复版（添加/删除库存功能）
 import React, { memo, useState, useCallback, useEffect } from 'react';
 import { Warehouse, Plus, Search, RefreshCw, Edit, Trash2, Save, X, Package, Box, ArrowLeft, AlertTriangle } from 'lucide-react';
-import { useApi } from '../hooks/useApi';
-import { useAuth } from '../contexts/AuthContext';
+import { useApi } from "@/hooks/useApi";
+import { useAuth } from "@/contexts/AuthContext";
 
 // ============ 内置 UI 组件 ============
 const Card = memo(({ children, style = {}, onClick }) => (

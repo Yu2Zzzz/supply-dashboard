@@ -1,6 +1,6 @@
 // src/contexts/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { BASE_URL } from '../config/constants';
+import { BASE_URL } from "@/config/constants";
 
 const AuthContext = createContext(null);
 

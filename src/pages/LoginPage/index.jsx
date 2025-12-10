@@ -1,7 +1,7 @@
 // src/pages/LoginPage.jsx
 import React, { memo, useState } from 'react';
 import { AlertCircle, Factory } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from "@/contexts/AuthContext";
 
 const LoginPage = memo(() => {
   const [username, setUsername] = useState('');

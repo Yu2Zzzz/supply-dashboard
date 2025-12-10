@@ -201,7 +201,7 @@ console.log('📝 创建 contexts/AuthContext.jsx...');
 
 const authContent = `// src/contexts/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { BASE_URL } from '../config/constants';
+import { BASE_URL } from "@/config/constants";
 
 const AuthContext = createContext(null);
 
@@ -293,8 +293,8 @@ console.log('📝 创建 hooks/useApi.js...');
 
 const hooksContent = `// src/hooks/useApi.js
 import { useCallback } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { BASE_URL } from '../config/constants';
+import { useAuth } from "@/contexts/AuthContext";
+import { BASE_URL } from "@/config/constants";
 
 export const useApi = () => {
   const { token, logout } = useAuth();

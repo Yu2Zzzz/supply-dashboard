@@ -1,8 +1,8 @@
 // src/pages/MaterialManagementPage.jsx - 增强版（CRUD + 库存分配 + 供应商 + 采购订单）
 import React, { memo, useState, useCallback, useEffect } from 'react';
 import { Box, Plus, Search, RefreshCw, Edit, Trash2, Save, X, Warehouse, Package, AlertTriangle, CheckCircle, User, TrendingUp, ShoppingCart } from 'lucide-react';
-import { useApi } from '../hooks/useApi';
-import { useAuth } from '../contexts/AuthContext';
+import { useApi } from "@/hooks/useApi";
+import { useAuth } from "@/contexts/AuthContext";
 
 // ============ 内置 UI 组件 ============
 const Card = memo(({ children, style = {} }) => (

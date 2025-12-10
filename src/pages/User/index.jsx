@@ -1,8 +1,8 @@
 // src/pages/UserManagementPage.jsx - 支持查看已删除用户
 import React, { memo, useState, useCallback, useEffect } from 'react';
 import { UserPlus, Edit, Trash2, Save, Users, Power, PowerOff, RefreshCw, RotateCcw, Archive } from 'lucide-react';
-import { useApi } from '../hooks/useApi';
-import { useAuth } from '../contexts/AuthContext';
+import { useApi } from "@/hooks/useApi";
+import { useAuth } from "@/contexts/AuthContext";
 
 // ============ 内置 UI 组件 ============
 const Button = memo(({ children, onClick, variant = 'primary', icon: Icon, size = 'md', disabled = false, style = {} }) => {

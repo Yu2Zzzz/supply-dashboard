@@ -7,13 +7,14 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useApi } from './hooks/useApi';
 
 // 导入页面组件
-import LoginPage from './pages/LoginPage';
-import SalesOrderPage from './pages/SalesOrderPage';
-import PurchaseOrderPage from './pages/PurchaseOrderPage';
-import UserManagementPage from './pages/UserManagementPage';
-import WarehouseManagementPage from './pages/WarehouseManagementPage';
-import ProductManagementPage from './pages/ProductManagementPage';
-import MaterialManagementPage from './pages/MaterialManagementPage';
+// ✅ 新的导入（使用新路径）
+import LoginPage from "./pages/LoginPage/index";
+import SalesOrderPage from "./pages/SalesOrder/index";
+import PurchaseOrderPage from "./pages/Purchase/index";
+import UserManagementPage from "./pages/User/index";
+import ProductManagementPage from "./pages/Product/index";
+import MaterialManagementPage from "./pages/Material/index";
+import WarehouseManagementPage from "./pages/Warehouse/index";
 // ============ API 配置 ============
 
 
