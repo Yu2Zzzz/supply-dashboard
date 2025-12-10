@@ -302,8 +302,16 @@ const Sidebar = memo(({ currentPage, onNavigate, collapsed, onToggle }) => {
   ];
 
   const visibleItems = menuItems.filter(item => hasRole(item.roles));
-  const getRoleName = (role) => ({ admin: '管理员', sales: '业务员', purchaser: '采购员' }[role] || role);
-  const getRoleColor = (role) => ({ admin: '#ef4444', sales: '#3b82f6', purchaser: '#10b981' }[role] || '#64748b');
+  const getRoleName = (role) => {
+    if (!role) return '未知';
+    if (typeof role === 'object') return role.name || role.code || '未知';
+    return ({ admin: '管理员', sales: '业务员', purchaser: '采购员' }[role] || role);
+  };
+  const getRoleColor = (role) => {
+    if (!role) return '#64748b';
+    const roleStr = typeof role === 'object' ? (role.code || role.name) : role;
+    return ({ admin: '#3b82f6', sales: '#10b981', purchaser: '#f59e0b' }[roleStr] || '#64748b');
+  };
 
   return (
     <aside style={{
@@ -482,7 +490,7 @@ const DashboardPage = memo(({ data, onNav }) => {
                 {orderData.map(order => (
                   <TableRow key={order.id} onClick={() => onNav('order-detail', order.id)}>
                     <td style={{ padding: '16px', fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>{order.id}</td>
-                    <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{order.customer}</td>
+                    <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{typeof order.customer === "object" ? (order.customer?.name || "N/A") : order.customer}</td>
                     <td style={{ padding: '16px', textAlign: 'center', fontSize: '14px', color: '#64748b' }}>{order.lines.length}</td>
                     <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{order.deliveryDate}</td>
                     <td style={{ padding: '16px', textAlign: 'center' }}><StatusBadge level={order.overallRisk} size="sm" /></td>
@@ -712,7 +720,7 @@ const OrderDetailPage = memo(({ id, data, onNav, onBack }) => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a', margin: '0 0 8px 0' }}>订单 {order.id}</h1>
-            <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>{order.customer}</p>
+            <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>{typeof order.customer === "object" ? (order.customer?.name || "N/A") : order.customer}</p>
           </div>
           <StatusBadge level={orderOverallRisk} />
         </div>
@@ -1514,140 +1522,351 @@ const WarningsPage = memo(({ data }) => {
 // ============ 用户管理页面 ============
 
 // ============ 通用 CRUD 管理页面 ============
-const CrudManagementPage = memo(({ title, subtitle, apiEndpoint, columns, formFields, icon: Icon }) => {
-  const { request } = useApi();
-  const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
-  const [formData, setFormData] = useState({});
-  const [keyword, setKeyword] = useState('');
+// ============ 通用 CRUD 页面（安全渲染版） ============
+const CrudManagementPage = memo(({
+  title,
+  columns,
+  fetchUrl,
+  createUrl,
+  updateUrl,
+  deleteUrl,
+  filters: initialFilters = [],
+  Button,
+  Input,
+  Select,
+  Modal,
+  Card,
+  EmptyState,
+  LoadingScreen,
+  StatusTag,
+}) => {
+  const { token } = useAuth();
 
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
+
+  const [filters, setFilters] = useState(() =>
+    initialFilters.reduce((acc, f) => ({ ...acc, [f.key]: f.defaultValue || '' }), {})
+  );
+
+  const [search, setSearch] = useState('');
+  const [editingItem, setEditingItem] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // ---------- 核心：统一安全渲染函数 ----------
+  const normalizeValue = useCallback((value) => {
+    if (value == null || Number.isNaN(value)) return '';
+
+    // React 元素直接返回
+    if (React.isValidElement(value)) return value;
+
+    // 数组：逐个渲染并用逗号隔开
+    if (Array.isArray(value)) {
+      return value.map((v, i) => (
+        <span key={i}>
+          {i > 0 ? ', ' : ''}
+          {normalizeValue(v)}
+        </span>
+      ));
+    }
+
+    // 对象：尽量挑一个“最像人话”的字段来展示
+    if (typeof value === 'object') {
+      if ('name' in value && value.name != null) return String(value.name);
+      if ('code' in value && value.code != null) return String(value.code);
+      if ('id' in value && value.id != null) return String(value.id);
+      // 实在没办法，就安全地 JSON 一下避免直接把对象塞进 JSX
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return '[object]';
+      }
+    }
+
+    // 其他：统一转成字符串
+    return String(value);
+  }, []);
+
+  // 让每一格的渲染都走 normalizeValue
+    // 统一安全渲染单元格，避免把对象直接塞进 JSX
+  const renderCell = (col, item) => {
+    const raw = col.render ? col.render(item[col.key], item) : item[col.key];
+
+    // React 元素 / null / undefined 直接用
+    if (
+      React.isValidElement(raw) ||
+      raw === null ||
+      raw === undefined
+    ) {
+      return raw;
+    }
+
+    // 基本类型，转成字符串
+    const t = typeof raw;
+    if (t === 'string' || t === 'number' || t === 'boolean') {
+      return String(raw);
+    }
+
+    // 对象：尽量挑一个字段展示
+    if (t === 'object') {
+      if (raw.name) return String(raw.name);
+      if (raw.code) return String(raw.code);
+      if (raw.id) return String(raw.id);
+      try {
+        return JSON.stringify(raw);
+      } catch {
+        return '[object]';
+      }
+    }
+
+    // 兜底
+    return String(raw);
+  };
+
+  // ---------- 加载数据 ----------
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const res = await request(`${apiEndpoint}?keyword=${keyword}`);
-    if (res.success) setItems(res.data?.list || res.data || []);
-    setLoading(false);
-  }, [request, apiEndpoint, keyword]);
+    setError(null);
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(pageSize),
+        search: search || '',
+      });
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+      Object.entries(filters).forEach(([k, v]) => {
+        if (v != null && v !== '') params.append(k, v);
+      });
 
-  const handleSubmit = async () => {
-    const endpoint = editingItem ? `${apiEndpoint}/${editingItem.id}` : apiEndpoint;
-    const method = editingItem ? 'PUT' : 'POST';
-    const res = await request(endpoint, { method, body: JSON.stringify(formData) });
-    if (res.success) { setShowModal(false); fetchData(); }
-    else alert(res.message || '操作失败');
+      const res = await fetch(`${BASE_URL}${fetchUrl}?${params.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+
+      const list = json.data?.list || json.data || json.items || [];
+      setItems(Array.isArray(list) ? list : []);
+      setTotal(json.data?.total || json.total || list.length || 0);
+    } catch (err) {
+      console.error(`${title} 列表获取失败:`, err);
+      setError(err.message || '加载失败');
+    } finally {
+      setLoading(false);
+    }
+  }, [token, fetchUrl, page, pageSize, search, filters, title]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // ---------- 创建 / 更新 ----------
+  const handleSave = async (formData) => {
+    try {
+      setLoading(true);
+      const isEdit = !!editingItem;
+      const url = isEdit ? `${BASE_URL}${updateUrl}/${editingItem.id}` : `${BASE_URL}${createUrl}`;
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(formData),
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setIsModalOpen(false);
+      setEditingItem(null);
+      fetchData();
+    } catch (err) {
+      console.error(`${isEdit ? '更新' : '创建'} ${title} 失败:`, err);
+      alert(err.message || '保存失败');
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // ---------- 删除 ----------
   const handleDelete = async (id) => {
-    if (!window.confirm('确定要删除吗？')) return;
-    const res = await request(`${apiEndpoint}/${id}`, { method: 'DELETE' });
-    if (res.success) fetchData();
-    else alert(res.message || '删除失败');
+    if (!window.confirm('确认删除这条记录吗？')) return;
+    try {
+      setLoading(true);
+      const res = await fetch(`${BASE_URL}${deleteUrl}/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      fetchData();
+    } catch (err) {
+      console.error(`删除 ${title} 失败:`, err);
+      alert(err.message || '删除失败');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const openModal = (item = null) => {
-    setEditingItem(item);
-    const initialData = {};
-    formFields.forEach(f => { initialData[f.key] = item ? item[f.key] || '' : f.defaultValue || ''; });
-    setFormData(initialData);
-    setShowModal(true);
-  };
-
-  if (loading) return <LoadingScreen />;
-
+  // ---------- UI ----------
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ fontSize: '32px', fontWeight: 800, color: '#0f172a', margin: '0 0 8px 0' }}>{title}</h1>
-          <p style={{ fontSize: '15px', color: '#64748b', margin: 0 }}>{subtitle}</p>
-        </div>
-        <Button icon={Plus} onClick={() => openModal()}>新增</Button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1 style={{ fontSize: 22, margin: 0 }}>{title}</h1>
+        {Button && (
+          <Button onClick={() => { setEditingItem(null); setIsModalOpen(true); }}>
+            新建 {title}
+          </Button>
+        )}
       </div>
 
-      <Card style={{ marginBottom: '16px' }}>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <div style={{ flex: 1, position: 'relative' }}>
-            <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-            <input type="text" placeholder="搜索..." value={keyword} onChange={(e) => setKeyword(e.target.value)} style={{ width: '100%', padding: '12px 14px 12px 42px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', boxSizing: 'border-box' }} />
+      {/* 筛选区 */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+        {initialFilters.map((f) => (
+          <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 12, color: '#64748b' }}>{f.label}</span>
+            {f.type === 'select' && Select ? (
+              <Select
+                value={filters[f.key]}
+                onChange={(e) => setFilters((prev) => ({ ...prev, [f.key]: e.target.value }))}
+              >
+                <option value="">全部</option>
+                {(f.options || []).map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </Select>
+            ) : Input ? (
+              <Input
+                placeholder={f.placeholder || ''}
+                value={filters[f.key]}
+                onChange={(e) => setFilters((prev) => ({ ...prev, [f.key]: e.target.value }))}
+              />
+            ) : null}
           </div>
-          <Button variant="secondary" icon={RefreshCw} onClick={fetchData}>刷新</Button>
-        </div>
-      </Card>
+        ))}
 
-      <Card>
-        {items.length === 0 ? (
-          <EmptyState icon={Icon || Package} title="暂无数据" description="点击新增按钮添加" />
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        {Input && (
+          <div style={{ marginLeft: 'auto' }}>
+            <Input
+              placeholder="搜索…"
+              value={search}
+              onChange={(e) => { setPage(1); setSearch(e.target.value); }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* 列表区 */}
+      {loading && <LoadingScreen />}
+      {!loading && error && <EmptyState message={error} />}
+
+      {!loading && !error && (
+        <Card>
+          {items.length === 0 ? (
+            <EmptyState message={`暂无${title}`} />
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
-                <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                  {columns.map(col => <th key={col.key} style={{ textAlign: col.align || 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>{col.title}</th>)}
-                  <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b' }}>操作</th>
+                <tr>
+                  {columns.map((col) => (
+                    <th
+                      key={col.key}
+                      style={{
+                        textAlign: 'left',
+                        padding: '8px 10px',
+                        borderBottom: '1px solid #e2e8f0',
+                        background: '#f8fafc',
+                        fontWeight: 600,
+                        color: '#475569',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {col.title}
+                    </th>
+                  ))}
+                  <th style={{ width: 120, padding: '8px 10px', borderBottom: '1px solid #e2e8f0' }}>
+                    操作
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {items.map(item => (
-                  <tr key={item.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    {columns.map(col => <td key={col.key} style={{ padding: '16px', fontSize: '14px', color: '#374151', textAlign: col.align || 'left' }}>{col.render ? col.render(item[col.key], item) : item[col.key]}</td>)}
-                    <td style={{ padding: '16px', textAlign: 'center' }}>
-                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                        <Button size="sm" variant="secondary" icon={Edit} onClick={() => openModal(item)}>编辑</Button>
-                        <Button size="sm" variant="danger" icon={Trash2} onClick={() => handleDelete(item.id)}>删除</Button>
-                      </div>
+                {items.map((item) => (
+                  <tr key={item.id || item.code}>
+                          {columns.map(col => (
+        <td
+          key={col.key}
+          style={{
+            padding: '16px',
+            fontSize: '14px',
+            color: '#0f172a',
+            textAlign: col.align || 'left',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {renderCell(col, item)}
+        </td>
+      ))}
+
+                    <td
+                      style={{
+                        padding: '8px 10px',
+                        borderBottom: '1px solid #f1f5f9',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {Button && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => { setEditingItem(item); setIsModalOpen(true); }}
+                            style={{ marginRight: 8 }}
+                          >
+                            编辑
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDelete(item.id)}
+                          >
+                            删除
+                          </Button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-        )}
-      </Card>
+          )}
+        </Card>
+      )}
 
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingItem ? `编辑${title}` : `新增${title}`}>
-        {formFields.map(field => (
-          field.type === 'select' ? (
-            <Select key={field.key} label={field.label} value={formData[field.key]} onChange={v => setFormData({ ...formData, [field.key]: v })} required={field.required} options={field.options} />
-          ) : (
-            <Input key={field.key} label={field.label} type={field.type || 'text'} value={formData[field.key]} onChange={v => setFormData({ ...formData, [field.key]: v })} required={field.required} />
-          )
-        ))}
-        <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'flex-end' }}>
-          <Button variant="secondary" onClick={() => setShowModal(false)}>取消</Button>
-          <Button icon={Save} onClick={handleSubmit}>保存</Button>
-        </div>
-      </Modal>
+      {/* TODO: 你原来如果有 Modal / 分页，这里可以继续接上你自己的实现 */}
+      {Modal && isModalOpen && (
+        <Modal
+          open={isModalOpen}
+          onClose={() => { setIsModalOpen(false); setEditingItem(null); }}
+          title={editingItem ? `编辑${title}` : `新建${title}`}
+          onSave={handleSave}
+          initialData={editingItem || {}}
+          columns={columns}
+        />
+      )}
     </div>
   );
 });
-
-// ============ 产品/物料/供应商/仓库管理（使用通用CRUD） ============
-// ProductManagementPage 已移至 ./pages/ProductManagementPage.jsx
-
-
-const SupplierManagementPage = memo(() => (
-  <CrudManagementPage title="供应商管理" subtitle="管理供应商信息" apiEndpoint="/api/suppliers" icon={Building}
-    columns={[
-      { key: 'supplierCode', title: '供应商编码', render: (v) => <span style={{ fontWeight: 700, color: '#0f172a' }}>{v}</span> },
-      { key: 'name', title: '供应商名称' },
-      { key: 'contactPerson', title: '联系人' },
-      { key: 'phone', title: '电话' },
-      { key: 'onTimeRate', title: '准时率', align: 'center', render: (v) => <span style={{ fontWeight: 600, color: v >= 0.9 ? '#16a34a' : '#f59e0b' }}>{((v || 0) * 100).toFixed(0)}%</span> },
-    ]}
-    formFields={[
-      { key: 'supplierCode', label: '供应商编码', required: true },
-      { key: 'name', label: '供应商名称', required: true },
-      { key: 'contactPerson', label: '联系人' },
-      { key: 'phone', label: '电话' },
-      { key: 'email', label: '邮箱' },
-      { key: 'address', label: '地址' },
-    ]}
-  />
-));
-
 // WarehouseManagementPage 已移至 ./pages/WarehouseManagementPage.jsx
 
 // ============ 主应用内容（带URL路由） ============
