@@ -303,12 +303,27 @@ const Sidebar = memo(({ currentPage, onNavigate, collapsed, onToggle }) => {
     { key: 'users', label: '用户管理', icon: Users, roles: ['admin'] },
   ];
 
-  const visibleItems = !user ? menuItems : menuItems.filter(item => hasRole(item.roles));
+// ✅ 安全的菜单过滤 - 处理 role 是对象或字符串的情况
+  const visibleItems = !user ? menuItems : menuItems.filter(item => {
+    if (!user || !user.role) return false;
+    
+    // 提取角色字符串
+    const userRoleStr = typeof user.role === 'object' 
+      ? (user.role.code || user.role.name || '')
+      : String(user.role);
+    
+    // 检查权限
+    return item.roles.some(requiredRole => 
+      String(requiredRole).toLowerCase() === userRoleStr.toLowerCase()
+    );
+  });
+
   const getRoleName = (role) => {
     if (!role) return '未知';
     if (typeof role === 'object') return role.name || role.code || '未知';
     return ({ admin: '管理员', sales: '业务员', purchaser: '采购员' }[role] || role);
   };
+  
   const getRoleColor = (role) => {
     if (!role) return '#64748b';
     const roleStr = typeof role === 'object' ? (role.code || role.name) : role;
@@ -490,7 +505,14 @@ const DashboardPage = memo(({ data, onNav }) => {
               </thead>
               <tbody>
                 {orderData.map(order => (
-                  <TableRow key={order.id} onClick={() => onNav('order-detail', order.id)}>
+                  <TableRow 
+  key={order.id} 
+  onClick={() => {
+    console.log('🔍 Order data:', order);
+    console.log('🔍 ID type:', typeof order.id, order.id);
+    onNav('order-detail', order.id);
+  }}
+>
                     <td style={{ padding: '16px', fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>{order.id}</td>
                     <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{typeof order.customer === "object" ? (order.customer?.name || "N/A") : order.customer}</td>
                     <td style={{ padding: '16px', textAlign: 'center', fontSize: '14px', color: '#64748b' }}>{order.lines.length}</td>
@@ -529,7 +551,16 @@ const OrderDetailPage = memo(({ id, data, onNav, onBack }) => {
         setLoading(true);
         
         // 1. 获取订单详情（包含产品列表）
-        const orderRes = await fetch(`${BASE_URL}/api/sales-orders/${id}`, {
+        // 如果 id 是订单号（如 SO2025-002），转换为数字 ID
+        let apiId = id;
+        if (typeof id === 'string' && id.startsWith('SO')) {
+         // 尝试从本地数据查找真实 ID
+          const localOrder = orders.find(o => o.id === id || o.order_no === id);
+          apiId = localOrder?.order_id || localOrder?.sales_order_id || id;
+          console.log('🔍 Converting order ID:', id, '→', apiId);
+        }
+
+        const orderRes = await fetch(`${BASE_URL}/api/sales-orders/${apiId}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const orderData = await orderRes.json();
@@ -1964,10 +1995,29 @@ const MainApp = () => {
         EmptyState={EmptyState} 
         LoadingScreen={LoadingScreen} 
       />;
-      case 'products': return <ProductManagementPage />;
-      case 'materials': return <MaterialManagementPage />;
-      case 'suppliers': return <SupplierManagementPage />;
-      case 'warehouses': return <WarehouseManagementPage />;
+      case 'products': return <ProductManagementPage 
+        Button={Button} Input={Input} Select={Select} Modal={Modal} 
+        Card={Card} EmptyState={EmptyState} LoadingScreen={LoadingScreen}
+      />;
+
+      case 'materials': return <MaterialManagementPage 
+        Button={Button} Input={Input} Select={Select} Modal={Modal} 
+        Card={Card} EmptyState={EmptyState} LoadingScreen={LoadingScreen}
+      />;
+
+      case 'warehouses': return <WarehouseManagementPage 
+        Button={Button} Input={Input} Select={Select} Modal={Modal} 
+       Card={Card} EmptyState={EmptyState} LoadingScreen={LoadingScreen}
+      />;
+      case 'suppliers': return <SupplierManagementPage 
+        Button={Button}
+        Input={Input}
+        Select={Select}
+        Modal={Modal}
+        Card={Card}
+        EmptyState={EmptyState}
+        LoadingScreen={LoadingScreen}
+      />;
       case 'orders': return <SalesOrderPage 
         Button={Button} 
         Input={Input} 
