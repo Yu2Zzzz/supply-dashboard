@@ -19,7 +19,7 @@ const Button = memo(({ children, onClick, variant = 'primary', icon: Icon, size 
     opacity: disabled ? 0.5 : 1, ...style
   };
   const variants = {
-    primary: { background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: '#fff' },
+    primary: { background: 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)', color: '#fff' },
     secondary: { background: '#f1f5f9', color: '#374151' },
     danger: { background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', color: '#fff' },
     success: { background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff' },
@@ -65,7 +65,7 @@ const EmptyState = memo(({ icon: Icon, title, description }) => (
 const LoadingScreen = memo(() => (
   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px' }}>
     <div style={{ textAlign: 'center' }}>
-      <div style={{ width: '48px', height: '48px', margin: '0 auto 16px', border: '4px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+      <div style={{ width: '48px', height: '48px', margin: '0 auto 16px', border: '4px solid #e2e8f0', borderTopColor: '#f97316', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
       <div style={{ color: '#64748b' }}>加载中...</div>
     </div>
     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -374,7 +374,7 @@ const MaterialManagementPage = memo(() => {
             </div>
             <div>
               <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>安全库存</div>
-              <div style={{ fontSize: '18px', fontWeight: 700, color: '#3b82f6' }}>{selectedMaterial.safeStock || selectedMaterial.safe_stock || 100}</div>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: '#f97316' }}>{selectedMaterial.safeStock || selectedMaterial.safe_stock || 100}</div>
             </div>
           </div>
         </Card>
@@ -387,12 +387,12 @@ const MaterialManagementPage = memo(() => {
           ) : materialSuppliers.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {materialSuppliers.slice(0, 3).map((supplier, idx) => (
-                <div key={idx} style={{ padding: '16px', background: '#f8fafc', borderRadius: '12px', border: idx === 0 ? '2px solid #3b82f6' : '1px solid #e2e8f0' }}>
+                <div key={idx} style={{ padding: '16px', background: '#f8fafc', borderRadius: '12px', border: idx === 0 ? '2px solid #f97316' : '1px solid #e2e8f0' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                       <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
                         {supplier.name || supplier.supplier_name}
-                        {idx === 0 && <span style={{ marginLeft: '8px', padding: '2px 8px', fontSize: '11px', background: '#dbeafe', color: '#3b82f6', borderRadius: '4px', fontWeight: 600 }}>主供应商</span>}
+                        {idx === 0 && <span style={{ marginLeft: '8px', padding: '2px 8px', fontSize: '11px', background: '#ffedd5', color: '#f97316', borderRadius: '4px', fontWeight: 600 }}>主供应商</span>}
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '16px' }}>
@@ -506,7 +506,7 @@ const MaterialManagementPage = memo(() => {
                       <td style={{ padding: '16px', fontSize: '16px', fontWeight: 700, textAlign: 'center', color: (material.stock || 0) < (material.safeStock || material.safe_stock || 100) ? '#ef4444' : '#10b981' }}>
                         {material.stock || 0}
                       </td>
-                      <td style={{ padding: '16px', fontSize: '16px', fontWeight: 700, textAlign: 'center', color: '#3b82f6' }}>
+                      <td style={{ padding: '16px', fontSize: '16px', fontWeight: 700, textAlign: 'center', color: '#f97316' }}>
                         {material.in_transit || material.inTransit || 0}
                       </td>
                       <td style={{ padding: '16px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
@@ -638,7 +638,7 @@ const MaterialManagementPage = memo(() => {
                               value={inventoryFormData.quantity}
                               onChange={e => setInventoryFormData({ ...inventoryFormData, quantity: parseFloat(e.target.value) || 0 })}
                               step="0.1"
-                              style={{ width: '100%', padding: '10px 12px', fontSize: '14px', border: '2px solid #3b82f6', borderRadius: '8px', outline: 'none', boxSizing: 'border-box', fontWeight: 600 }}
+                              style={{ width: '100%', padding: '10px 12px', fontSize: '14px', border: '2px solid #f97316', borderRadius: '8px', outline: 'none', boxSizing: 'border-box', fontWeight: 600 }}
                             />
                           </div>
                           <div>
@@ -649,7 +649,7 @@ const MaterialManagementPage = memo(() => {
                               type="number"
                               value={inventoryFormData.safetyStock}
                               onChange={e => setInventoryFormData({ ...inventoryFormData, safetyStock: parseInt(e.target.value) || 100 })}
-                              style={{ width: '100%', padding: '10px 12px', fontSize: '14px', border: '2px solid #3b82f6', borderRadius: '8px', outline: 'none', boxSizing: 'border-box', fontWeight: 600 }}
+                              style={{ width: '100%', padding: '10px 12px', fontSize: '14px', border: '2px solid #f97316', borderRadius: '8px', outline: 'none', boxSizing: 'border-box', fontWeight: 600 }}
                             />
                           </div>
                         </div>
@@ -663,7 +663,7 @@ const MaterialManagementPage = memo(() => {
                           </div>
                           <div>
                             <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, marginBottom: '6px' }}>安全库存</div>
-                            <div style={{ fontSize: '20px', fontWeight: 700, color: '#3b82f6' }}>
+                            <div style={{ fontSize: '20px', fontWeight: 700, color: '#f97316' }}>
                               {inventory.safetyStock || 100}
                             </div>
                           </div>
@@ -698,3 +698,4 @@ const MaterialManagementPage = memo(() => {
 });
 
 export default MaterialManagementPage;
+

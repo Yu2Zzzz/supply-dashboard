@@ -12,7 +12,7 @@ const Card = memo(({ children, style = {}, onClick }) => (
 const Button = memo(({ children, onClick, variant = 'primary', icon: Icon, size = 'md', disabled = false, style = {} }) => {
   const baseStyle = { display: 'inline-flex', alignItems: 'center', gap: '8px', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: 600, borderRadius: size === 'sm' ? '8px' : '12px', transition: 'all 0.2s', padding: size === 'sm' ? '8px 12px' : '12px 20px', fontSize: size === 'sm' ? '12px' : '14px', opacity: disabled ? 0.5 : 1, ...style };
   const variants = {
-    primary: { background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: '#fff' },
+    primary: { background: 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)', color: '#fff' },
     secondary: { background: '#f1f5f9', color: '#374151' },
     danger: { background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', color: '#fff' },
     success: { background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff' },
@@ -66,7 +66,7 @@ const EmptyState = memo(({ icon: Icon, title, description }) => (
 const LoadingScreen = memo(() => (
   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px' }}>
     <div style={{ textAlign: 'center' }}>
-      <div style={{ width: '48px', height: '48px', margin: '0 auto 16px', border: '4px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+      <div style={{ width: '48px', height: '48px', margin: '0 auto 16px', border: '4px solid #e2e8f0', borderTopColor: '#f97316', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
       <div style={{ color: '#64748b' }}>加载中...</div>
     </div>
     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -373,7 +373,7 @@ const WarehouseManagementPage = memo(() => {
 
         {/* 统计卡片 */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-          <Card style={{ background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: '#fff' }}>
+          <Card style={{ background: 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)', color: '#fff' }}>
             <div style={{ fontSize: '14px', opacity: 0.9 }}>物料种类</div>
             <div style={{ fontSize: '32px', fontWeight: 800 }}>{materialInventory.length}</div>
           </Card>
@@ -393,7 +393,7 @@ const WarehouseManagementPage = memo(() => {
             <div style={{ display: 'flex', gap: '8px' }}>
               <button onClick={() => setInventoryTab('materials')} style={{
                 padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 600,
-                background: inventoryTab === 'materials' ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : '#f1f5f9',
+                background: inventoryTab === 'materials' ? 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)' : '#f1f5f9',
                 color: inventoryTab === 'materials' ? '#fff' : '#64748b'
               }}>
                 <Package size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
@@ -401,7 +401,7 @@ const WarehouseManagementPage = memo(() => {
               </button>
               <button onClick={() => setInventoryTab('products')} style={{
                 padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 600,
-                background: inventoryTab === 'products' ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : '#f1f5f9',
+                background: inventoryTab === 'products' ? 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)' : '#f1f5f9',
                 color: inventoryTab === 'products' ? '#fff' : '#64748b'
               }}>
                 <Box size={16} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
@@ -582,7 +582,7 @@ const WarehouseManagementPage = memo(() => {
                   <tr key={warehouse.id} style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }} onClick={() => handleWarehouseClick(warehouse)}>
                     <td style={{ padding: '16px', fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>{warehouse.warehouseCode || warehouse.warehouse_code}</td>
                     <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Warehouse size={18} style={{ color: '#3b82f6' }} />{warehouse.name}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Warehouse size={18} style={{ color: '#f97316' }} />{warehouse.name}</div>
                     </td>
                     <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{warehouse.location}</td>
                     <td style={{ padding: '16px', fontSize: '14px', fontWeight: 600, color: '#0f172a', textAlign: 'right' }}>{(warehouse.capacity || 0).toLocaleString()}</td>
@@ -622,3 +622,4 @@ const WarehouseManagementPage = memo(() => {
 });
 
 export default WarehouseManagementPage;
+

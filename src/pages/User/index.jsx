@@ -8,7 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 const Button = memo(({ children, onClick, variant = 'primary', icon: Icon, size = 'md', disabled = false, style = {} }) => {
   const [isHovered, setIsHovered] = useState(false);
   const variants = {
-    primary: { background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: '#fff', border: 'none' },
+    primary: { background: 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)', color: '#fff', border: 'none' },
     secondary: { background: '#fff', color: '#374151', border: '1px solid #d1d5db' },
     danger: { background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', color: '#fff', border: 'none' },
     success: { background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none' },
@@ -38,7 +38,7 @@ const Input = memo(({ label, value, onChange, placeholder, type = 'text', requir
     <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
       style={{ width: '100%', padding: '11px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px',
         outline: 'none', boxSizing: 'border-box', transition: 'all 0.2s', background: disabled ? '#f8fafc' : '#fff' }}
-      onFocus={(e) => e.target.style.borderColor = '#3b82f6'} onBlur={(e) => e.target.style.borderColor = '#e2e8f0'} />
+      onFocus={(e) => e.target.style.borderColor = '#f97316'} onBlur={(e) => e.target.style.borderColor = '#e2e8f0'} />
   </div>
 ));
 
@@ -308,7 +308,7 @@ const UserManagementPage = memo(() => {
               cursor: 'pointer',
               fontWeight: 600,
               fontSize: '13px',
-              background: viewMode === 'all' ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : '#f1f5f9',
+              background: viewMode === 'all' ? 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)' : '#f1f5f9',
               color: viewMode === 'all' ? '#fff' : '#64748b',
               transition: 'all 0.2s'
             }}
@@ -360,7 +360,7 @@ const UserManagementPage = memo(() => {
                       <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{user.email || '-'}</td>
                       <td style={{ padding: '16px', fontSize: '14px', color: '#64748b' }}>{user.phone || '-'}</td>
                       <td style={{ padding: '16px', textAlign: 'center' }}>
-                        <span style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 600, borderRadius: '20px', background: '#eff6ff', color: '#3b82f6' }}>
+                        <span style={{ padding: '6px 14px', fontSize: '12px', fontWeight: 600, borderRadius: '20px', background: '#fff7ed', color: '#f97316' }}>
                           {getRoleName(user.roleId || user.role_id)}
                         </span>
                       </td>
@@ -449,3 +449,4 @@ const UserManagementPage = memo(() => {
 });
 
 export default UserManagementPage;
+

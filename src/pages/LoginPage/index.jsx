@@ -1,7 +1,16 @@
 // src/pages/LoginPage.jsx
 import React, { memo, useState } from 'react';
-import { AlertCircle, Factory } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { useAuth } from "@/contexts/AuthContext";
+
+const danmakuLines = [
+  'Aluminium Garden Furniture',
+  'Rope Garden Furniture',
+  'Fabric Garden Furniture',
+  'Rattan Garden Furniture',
+  'Sun Lounger',
+  'Dining Table'
+];
 
 const LoginPage = memo(() => {
   const [username, setUsername] = useState('');
@@ -25,71 +34,98 @@ const LoginPage = memo(() => {
       display: 'flex', 
       alignItems: 'center', 
       justifyContent: 'center', 
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
-      padding: '24px',
+      background: 'radial-gradient(circle at 15% 20%, rgba(255,153,51,0.12), transparent 32%), radial-gradient(circle at 85% 10%, rgba(0,0,0,0.06), transparent 28%), linear-gradient(140deg, #f7f3eb 0%, #f1eadf 55%, #f7f3eb 100%)', 
+      padding: '32px',
       position: 'relative',
-      overflow: 'hidden'
+      overflow: 'hidden',
+      color: '#1f2937'
     }}>
+      <style>{`
+        @keyframes scroll-left {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+      `}</style>
+
       <div style={{
         position: 'absolute',
-        top: '-10%',
-        right: '-5%',
-        width: '40%',
-        height: '40%',
-        background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%)',
-        borderRadius: '50%',
-        filter: 'blur(40px)'
+        inset: '-10%',
+        background: 'radial-gradient(circle at 25% 60%, rgba(249,115,22,0.12), transparent 42%), radial-gradient(circle at 80% 35%, rgba(0,0,0,0.08), transparent 32%)',
+        filter: 'blur(50px)',
+        zIndex: 0
       }} />
+
       <div style={{
         position: 'absolute',
-        bottom: '-10%',
-        left: '-5%',
-        width: '35%',
-        height: '35%',
-        background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%)',
-        borderRadius: '50%',
-        filter: 'blur(40px)'
-      }} />
+        inset: 0,
+        pointerEvents: 'none',
+        overflow: 'hidden',
+        zIndex: 0
+      }}>
+        {danmakuLines.map((line, index) => (
+          <div
+            key={line + index}
+            style={{
+              position: 'absolute',
+              top: `${(index * 13) % 100}%`,
+              left: 0,
+              width: '200%',
+              whiteSpace: 'nowrap',
+              fontSize: '20px',
+              fontWeight: 700,
+              letterSpacing: '4px',
+              textTransform: 'uppercase',
+              color: 'rgba(0,0,0,0.08)',
+              animation: `scroll-left ${16 + index * 3}s linear infinite`,
+              animationDelay: `-${index * 2}s`
+            }}
+          >
+            {`${line}   ${line}   ${line}   ${line}`}
+          </div>
+        ))}
+      </div>
 
       <div style={{ 
         width: '100%', 
-        maxWidth: '420px', 
-        background: 'rgba(255, 255, 255, 0.95)', 
-        backdropFilter: 'blur(20px)',
-        borderRadius: '24px', 
+        maxWidth: '440px', 
+        background: 'linear-gradient(140deg, rgba(255,255,255,0.9), rgba(255,255,255,0.78))', 
+        backdropFilter: 'blur(12px)',
+        borderRadius: '28px', 
         padding: '48px', 
-        boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+        boxShadow: '0 30px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.04)',
         position: 'relative',
-        zIndex: 1
+        zIndex: 1,
+        border: '1px solid rgba(0,0,0,0.05)'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{ 
-            width: '72px', 
-            height: '72px', 
-            margin: '0 auto 20px', 
-            background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)', 
-            borderRadius: '20px', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            boxShadow: '0 10px 25px rgba(59, 130, 246, 0.3)',
-          }}>
-            <Factory size={36} style={{ color: '#fff' }} />
-          </div>
-          <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', margin: 0 }}>供应链管理系统</h1>
-          <p style={{ fontSize: '15px', color: '#64748b', marginTop: '8px', fontWeight: 500 }}>请登录您的账号</p>
+          <img 
+            src="/logo.png" 
+            alt="BHR Logo" 
+            style={{ 
+              width: '104px', 
+              height: '104px', 
+              objectFit: 'contain', 
+              filter: 'brightness(0) saturate(100%)',
+              marginBottom: '22px',
+              display: 'block',
+              marginLeft: 'auto',
+              marginRight: 'auto'
+            }} 
+          />
+          <h1 style={{ fontSize: '28px', fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '1px' }}>百汇供应链管理系统</h1>
+          <p style={{ fontSize: '15px', color: '#475569', marginTop: '10px', fontWeight: 500 }}>请登录您的账号</p>
         </div>
 
         {error && (
           <div style={{ 
             padding: '14px 18px', 
-            background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)', 
-            border: '1px solid #fca5a5', 
+            background: 'linear-gradient(135deg, rgba(248,113,113,0.18) 0%, rgba(220,38,38,0.15) 100%)', 
+            border: '1px solid rgba(248,113,113,0.4)', 
             borderRadius: '12px', 
             marginBottom: '24px', 
-            color: '#dc2626', 
+            color: '#b91c1c', 
             fontSize: '14px',
-            fontWeight: 500,
+            fontWeight: 600,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <AlertCircle size={18} />
@@ -100,7 +136,7 @@ const LoginPage = memo(() => {
 
         <form onSubmit={handleSubmit}>
           <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>用户名</label>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#1f2937', marginBottom: '10px', letterSpacing: '0.3px' }}>用户名</label>
             <input 
               type="text" 
               value={username} 
@@ -111,19 +147,22 @@ const LoginPage = memo(() => {
                 width: '100%', 
                 padding: '14px 16px', 
                 fontSize: '15px', 
-                border: '2px solid #e2e8f0', 
+                border: '1px solid rgba(0,0,0,0.08)', 
                 borderRadius: '12px', 
                 outline: 'none', 
                 boxSizing: 'border-box',
                 transition: 'all 0.2s',
-                fontWeight: 500
+                fontWeight: 600,
+                background: '#f9fafb',
+                color: '#0f172a',
+                boxShadow: '0 10px 24px rgba(0,0,0,0.08)'
               }} 
-              onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-              onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+              onFocus={(e) => e.target.style.borderColor = '#f97316'}
+              onBlur={(e) => e.target.style.borderColor = 'rgba(0,0,0,0.08)'}
             />
           </div>
           <div style={{ marginBottom: '28px' }}>
-            <label style={{ display: 'block', fontSize: '14px', fontWeight: 600, color: '#374151', marginBottom: '10px' }}>密码</label>
+            <label style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: '#1f2937', marginBottom: '10px', letterSpacing: '0.3px' }}>密码</label>
             <input 
               type="password" 
               value={password} 
@@ -134,15 +173,18 @@ const LoginPage = memo(() => {
                 width: '100%', 
                 padding: '14px 16px', 
                 fontSize: '15px', 
-                border: '2px solid #e2e8f0', 
+                border: '1px solid rgba(0,0,0,0.08)', 
                 borderRadius: '12px', 
                 outline: 'none', 
                 boxSizing: 'border-box',
                 transition: 'all 0.2s',
-                fontWeight: 500
+                fontWeight: 600,
+                background: '#f9fafb',
+                color: '#0f172a',
+                boxShadow: '0 10px 24px rgba(0,0,0,0.08)'
               }} 
-              onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
-              onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+              onFocus={(e) => e.target.style.borderColor = '#f97316'}
+              onBlur={(e) => e.target.style.borderColor = 'rgba(0,0,0,0.08)'}
             />
           </div>
           <button 
@@ -152,14 +194,15 @@ const LoginPage = memo(() => {
               width: '100%', 
               padding: '16px', 
               fontSize: '16px', 
-              fontWeight: 700, 
-              color: '#fff', 
-              background: loading ? '#94a3b8' : 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)', 
+              fontWeight: 800, 
+              color: '#111827', 
+              background: loading ? '#e2e8f0' : 'linear-gradient(140deg, #f97316 0%, #fb923c 100%)', 
               border: 'none', 
-              borderRadius: '12px', 
+              borderRadius: '14px', 
               cursor: loading ? 'not-allowed' : 'pointer',
-              boxShadow: loading ? 'none' : '0 10px 25px rgba(59, 130, 246, 0.3)',
-              transition: 'all 0.3s',
+              boxShadow: loading ? 'none' : '0 15px 35px rgba(249, 115, 22, 0.35)',
+              transition: 'all 0.25s',
+              letterSpacing: '0.5px'
             }}
           >
             {loading ? '登录中...' : '登 录'}
@@ -169,14 +212,18 @@ const LoginPage = memo(() => {
         <div style={{ 
           marginTop: '32px', 
           padding: '20px', 
-          background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', 
-          borderRadius: '12px', 
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)', 
+          borderRadius: '14px', 
           fontSize: '13px', 
-          color: '#64748b',
-          border: '1px solid #e2e8f0'
+          color: '#334155',
+          border: '1px solid rgba(0,0,0,0.05)',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.12)'
         }}>
-          <div style={{ fontWeight: 700, marginBottom: '12px', color: '#374151', fontSize: '14px' }}>🔐 测试账号</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontWeight: 500 }}>
+          <div style={{ fontWeight: 800, marginBottom: '12px', color: '#0f172a', fontSize: '14px', letterSpacing: '0.3px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#f97316' }} />
+            测试账号
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontWeight: 600 }}>
             <div>👨‍💼 管理员: admin / admin123</div>
             <div>💼 业务员: sales / sales123</div>
             <div>📦 采购员: purchaser / purchaser123</div>

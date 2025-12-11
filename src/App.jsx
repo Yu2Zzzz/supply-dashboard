@@ -17,6 +17,19 @@ import MaterialManagementPage from "./pages/Material/index";
 import WarehouseManagementPage from "./pages/Warehouse/index";
 import SupplierManagementPage from "./pages/Supplier/index";
 
+// 使用自定义 BHR SVG 作为 favicon
+const useWhiteFavicon = () => {
+  useEffect(() => {
+    let link = document.querySelector("link[rel='icon']");
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.href = '/bhr-favicon.svg';
+  }, []);
+};
+
 // ============ API 配置 ============
 
 
@@ -137,8 +150,8 @@ const Button = memo(({ children, onClick, variant = 'primary', icon: Icon, size 
   const [isHovered, setIsHovered] = useState(false);
   
   const variants = {
-    primary: { background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: '#fff', border: 'none' },
-    secondary: { background: '#fff', color: '#374151', border: '1px solid #d1d5db' },
+    primary: { background: 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)', color: '#fff', border: 'none', boxShadow: '0 10px 24px rgba(249, 115, 22, 0.25)' },
+    secondary: { background: '#ffffff', color: '#0f172a', border: '1px solid #e2e8f0' },
     danger: { background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', color: '#fff', border: 'none' },
     success: { background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none' },
     warning: { background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#fff', border: 'none' },
@@ -253,17 +266,31 @@ const EmptyState = memo(({ icon: Icon, title, description }) => (
   </div>
 ));
 
-const LoadingScreen = memo(() => (
-  <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-    <div style={{ textAlign: 'center' }}>
-      <div style={{ width: '80px', height: '80px', margin: '0 auto 32px', background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)', borderRadius: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'pulse 2s infinite' }}>
-        <Factory size={40} style={{ color: '#fff' }} />
-      </div>
-      <div style={{ fontSize: '20px', fontWeight: 700, color: '#0f172a', marginBottom: '8px' }}>加载中</div>
-      <div style={{ fontSize: '14px', color: '#64748b', fontWeight: 500 }}>正在获取数据...</div>
+const LoadingScreen = memo(() => {
+  const pattern = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100' viewBox='0 0 200 100'%3E%3Crect width='200' height='100' fill='white'/%3E%3Ctext x='10' y='70' font-family='Segoe UI Black, Arial Black, Helvetica, Arial, sans-serif' font-size='50' font-weight='900' letter-spacing='4' fill='black'%3EBHR%3C/text%3E%3C/svg%3E\")";
+  return (
+    <div style={{ 
+      minHeight: '100vh', 
+      backgroundColor: '#fff',
+      position: 'relative',
+      overflow: 'hidden',
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center'
+    }}>
+      <div style={{
+        position: 'absolute',
+        inset: '-25%',
+        backgroundImage: pattern,
+        backgroundSize: '200px 100px',
+        backgroundRepeat: 'repeat',
+        transform: 'rotate(-20deg)',
+        transformOrigin: 'center',
+        opacity: 1
+      }} />
     </div>
-  </div>
-));
+  );
+});
 
 const ErrorScreen = memo(({ error, onRetry }) => (
   <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
@@ -333,7 +360,7 @@ const Sidebar = memo(({ currentPage, onNavigate, collapsed, onToggle }) => {
   return (
     <aside style={{
       width: collapsed ? '80px' : '280px',
-      background: 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)',
+      background: 'linear-gradient(180deg, #0f172a 0%, #151a24 100%)',
       height: '100vh',
       position: 'fixed',
       left: 0,
@@ -344,14 +371,14 @@ const Sidebar = memo(({ currentPage, onNavigate, collapsed, onToggle }) => {
       zIndex: 100,
       boxShadow: '4px 0 24px rgba(0,0,0,0.12)'
     }}>
-      <div style={{ padding: '24px', borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{ width: '44px', height: '44px', background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <Factory size={22} style={{ color: '#fff' }} />
+      <div style={{ padding: '24px', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ width: '44px', height: '44px', background: 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Factory size={22} style={{ color: '#0b0f17' }} />
         </div>
         {!collapsed && (
           <div>
             <div style={{ fontSize: '17px', fontWeight: 700, color: '#fff' }}>供应链管理</div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>CONTROL CENTER</div>
+            <div style={{ fontSize: '11px', color: '#cbd5e1', marginTop: '2px', letterSpacing: '1px' }}>CONTROL CENTER</div>
           </div>
         )}
       </div>
@@ -363,19 +390,20 @@ const Sidebar = memo(({ currentPage, onNavigate, collapsed, onToggle }) => {
           return (
             <div key={item.key} onClick={() => onNavigate(item.key)} style={{
               display: 'flex', alignItems: 'center', gap: '12px', padding: collapsed ? '14px' : '14px 18px', marginBottom: '6px', borderRadius: '12px', cursor: 'pointer',
-              background: isActive ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : 'transparent',
-              color: isActive ? '#fff' : '#94a3b8', transition: 'all 0.2s', justifyContent: collapsed ? 'center' : 'flex-start',
-              boxShadow: isActive ? '0 4px 12px rgba(59, 130, 246, 0.3)' : 'none'
+              background: isActive ? 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)' : 'transparent',
+              color: isActive ? '#0b0f17' : '#cbd5e1', transition: 'all 0.2s', justifyContent: collapsed ? 'center' : 'flex-start',
+              boxShadow: isActive ? '0 4px 12px rgba(249, 115, 22, 0.28)' : 'none',
+              border: isActive ? '1px solid rgba(0,0,0,0.12)' : '1px solid transparent'
             }}>
               <Icon size={20} />
-              {!collapsed && <span style={{ fontSize: '14px', fontWeight: isActive ? 600 : 500 }}>{item.label}</span>}
+              {!collapsed && <span style={{ fontSize: '14px', fontWeight: isActive ? 700 : 500 }}>{item.label}</span>}
             </div>
           );
         })}
       </nav>
 
-      <div style={{ padding: '20px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', marginBottom: '14px' }}>
+      <div style={{ padding: '20px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px', background: 'rgba(255,255,255,0.04)', borderRadius: '12px', marginBottom: '14px' }}>
           <div style={{ width: '40px', height: '40px', background: getRoleColor(user?.role), borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <User size={20} style={{ color: '#fff' }} />
           </div>
@@ -391,7 +419,7 @@ const Sidebar = memo(({ currentPage, onNavigate, collapsed, onToggle }) => {
         </button>
       </div>
 
-      <button onClick={onToggle} style={{ position: 'absolute', right: '-16px', top: '50%', transform: 'translateY(-50%)', width: '32px', height: '32px', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', border: 'none', borderRadius: '50%', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)' }}>
+      <button onClick={onToggle} style={{ position: 'absolute', right: '-16px', top: '50%', transform: 'translateY(-50%)', width: '32px', height: '32px', background: 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)', border: 'none', borderRadius: '50%', color: '#0b0f17', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(249, 115, 22, 0.4)' }}>
         {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
       </button>
     </aside>
@@ -2043,7 +2071,10 @@ const MainApp = () => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)' }}>
+    <div style={{ 
+      minHeight: '100vh', 
+      background: 'radial-gradient(circle at 15% 20%, rgba(249,115,22,0.08), transparent 30%), radial-gradient(circle at 80% 0%, rgba(0,0,0,0.04), transparent 28%), linear-gradient(135deg, #fdfbf7 0%, #f6f1e8 60%, #fdfbf7 100%)' 
+    }}>
       <Sidebar 
         currentPage={page} 
         onNavigate={(p) => navigate(p, null)}
@@ -2079,6 +2110,7 @@ export default function App() {
 
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
+  useWhiteFavicon();
   if (isLoading) return <LoadingScreen />;
   if (!isAuthenticated) return <LoginPage />;
   return <MainApp />;

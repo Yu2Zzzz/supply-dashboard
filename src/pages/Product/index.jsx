@@ -19,7 +19,7 @@ const Button = memo(({ children, onClick, variant = 'primary', icon: Icon, size 
     opacity: disabled ? 0.5 : 1, ...style
   };
   const variants = {
-    primary: { background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: '#fff' },
+    primary: { background: 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)', color: '#fff' },
     secondary: { background: '#f1f5f9', color: '#374151' },
     danger: { background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', color: '#fff' },
     success: { background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff' },
@@ -76,7 +76,7 @@ const EmptyState = memo(({ icon: Icon, title, description }) => (
 const LoadingScreen = memo(() => (
   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px' }}>
     <div style={{ textAlign: 'center' }}>
-      <div style={{ width: '48px', height: '48px', margin: '0 auto 16px', border: '4px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+      <div style={{ width: '48px', height: '48px', margin: '0 auto 16px', border: '4px solid #e2e8f0', borderTopColor: '#f97316', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
       <div style={{ color: '#64748b' }}>加载中...</div>
     </div>
     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -434,8 +434,8 @@ const ProductManagementPage = memo(() => {
                             fontSize: '12px', 
                             fontWeight: 700, 
                             borderRadius: '20px',
-                            background: bomCount > 0 ? '#dbeafe' : '#f1f5f9',
-                            color: bomCount > 0 ? '#3b82f6' : '#94a3b8'
+                            background: bomCount > 0 ? '#ffedd5' : '#f1f5f9',
+                            color: bomCount > 0 ? '#f97316' : '#94a3b8'
                           }}>
                             {bomCount} 种物料
                           </span>
@@ -579,7 +579,7 @@ const ProductManagementPage = memo(() => {
               </div>
             </div>
 
-            <div style={{ marginBottom: '20px', padding: '16px', background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', borderRadius: '12px', color: '#fff' }}>
+            <div style={{ marginBottom: '20px', padding: '16px', background: 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)', borderRadius: '12px', color: '#fff' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', textAlign: 'center' }}>
                 <div><div style={{ fontSize: '12px', opacity: 0.9 }}>总库存</div><div style={{ fontSize: '24px', fontWeight: 800 }}>{productInventories.reduce((sum, inv) => sum + Number(inv.quantity ?? 0), 0).toFixed(2)}</div></div>
                 <div><div style={{ fontSize: '12px', opacity: 0.9 }}>已配置仓库</div><div style={{ fontSize: '24px', fontWeight: 800 }}>{productInventories.filter(inv => inv.hasInventory).length}/{warehouses.length}</div></div>
@@ -596,11 +596,11 @@ const ProductManagementPage = memo(() => {
                   const isEditing = editingInventory?.warehouseId === inv.warehouseId;
                   
                   return (
-                    <div key={idx} style={{ padding: '16px', background: isEditing ? '#eff6ff' : (inv.hasInventory ? '#fff' : '#f8fafc'), borderRadius: '12px', border: isEditing ? '2px solid #3b82f6' : '1px solid #e2e8f0' }}>
+                    <div key={idx} style={{ padding: '16px', background: isEditing ? '#fff7ed' : (inv.hasInventory ? '#fff' : '#f8fafc'), borderRadius: '12px', border: isEditing ? '2px solid #f97316' : '1px solid #e2e8f0' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                            <Warehouse size={18} style={{ color: '#3b82f6' }} />
+                            <Warehouse size={18} style={{ color: '#f97316' }} />
                             <span style={{ fontWeight: 700, color: '#0f172a' }}>{inv.warehouseCode}</span>
                             <span style={{ color: '#64748b' }}>- {inv.warehouseName}</span>
                           </div>
@@ -670,3 +670,4 @@ const ProductManagementPage = memo(() => {
 });
 
 export default ProductManagementPage;
+

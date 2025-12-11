@@ -14,7 +14,7 @@ const Card = memo(({ children, style = {} }) => (
 const Button = memo(({ children, onClick, variant = 'primary', icon: Icon, size = 'md', disabled = false, style = {} }) => {
   const baseStyle = { display: 'inline-flex', alignItems: 'center', gap: '8px', border: 'none', cursor: disabled ? 'not-allowed' : 'pointer', fontWeight: 600, borderRadius: size === 'sm' ? '8px' : '12px', transition: 'all 0.2s', padding: size === 'sm' ? '8px 12px' : '12px 20px', fontSize: size === 'sm' ? '12px' : '14px', opacity: disabled ? 0.5 : 1, ...style };
   const variants = {
-    primary: { background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', color: '#fff' },
+    primary: { background: 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)', color: '#fff' },
     secondary: { background: '#f1f5f9', color: '#374151' },
     danger: { background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', color: '#fff' },
     success: { background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff' },
@@ -69,7 +69,7 @@ const EmptyState = memo(({ icon: Icon, title, description }) => (
 const LoadingScreen = memo(() => (
   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px' }}>
     <div style={{ textAlign: 'center' }}>
-      <div style={{ width: '48px', height: '48px', margin: '0 auto 16px', border: '4px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+      <div style={{ width: '48px', height: '48px', margin: '0 auto 16px', border: '4px solid #e2e8f0', borderTopColor: '#f97316', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
       <div style={{ color: '#64748b' }}>加载中...</div>
     </div>
     <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -230,7 +230,7 @@ const SalesOrderPage = memo(() => {
             {['all', 'pending', 'confirmed', 'producing', 'shipped', 'completed'].map(status => (
               <button key={status} onClick={() => setStatusFilter(status)} style={{
                 padding: '10px 16px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px',
-                background: statusFilter === status ? 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)' : '#f1f5f9',
+                background: statusFilter === status ? 'linear-gradient(135deg, #f97316 0%, #fb923c 100%)' : '#f1f5f9',
                 color: statusFilter === status ? '#fff' : '#374151'
               }}>
                 {status === 'all' ? '全部' : (SO_STATUS[status]?.text || status)}
@@ -320,7 +320,7 @@ const SalesOrderPage = memo(() => {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', fontSize: '13px' }}>
                         <div><span style={{ color: '#64748b', fontWeight: 600 }}>数量：</span><span style={{ color: '#0f172a', fontWeight: 700 }}>{quantity}</span></div>
                         <div><span style={{ color: '#64748b', fontWeight: 600 }}>单价：</span><span style={{ color: '#10b981', fontWeight: 700 }}>¥{unitPrice.toFixed(2)}</span></div>
-                        <div><span style={{ color: '#64748b', fontWeight: 600 }}>小计：</span><span style={{ color: '#3b82f6', fontWeight: 700 }}>¥{subtotal.toFixed(2)}</span></div>
+                        <div><span style={{ color: '#64748b', fontWeight: 600 }}>小计：</span><span style={{ color: '#f97316', fontWeight: 700 }}>¥{subtotal.toFixed(2)}</span></div>
                       </div>
                     </div>
                   );
@@ -352,7 +352,7 @@ const SalesOrderPage = memo(() => {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
               <label style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>客户<span style={{ color: '#ef4444' }}> *</span></label>
-              <button onClick={() => setShowCustomerModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px', fontSize: '11px', fontWeight: 600, background: '#dbeafe', color: '#3b82f6', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+              <button onClick={() => setShowCustomerModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 8px', fontSize: '11px', fontWeight: 600, background: '#ffedd5', color: '#f97316', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
                 <UserPlus size={12} /> 新增客户
               </button>
             </div>
@@ -377,7 +377,7 @@ const SalesOrderPage = memo(() => {
           <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>状态流转说明</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', flexWrap: 'wrap' }}>
             <span style={{ padding: '4px 8px', background: '#f1f5f9', color: '#64748b', borderRadius: '4px' }}>待确认</span><span>→</span>
-            <span style={{ padding: '4px 8px', background: '#dbeafe', color: '#3b82f6', borderRadius: '4px' }}>已确认</span><span>→</span>
+            <span style={{ padding: '4px 8px', background: '#ffedd5', color: '#f97316', borderRadius: '4px' }}>已确认</span><span>→</span>
             <span style={{ padding: '4px 8px', background: '#fef3c7', color: '#f59e0b', borderRadius: '4px' }}>生产中</span><span>→</span>
             <span style={{ padding: '4px 8px', background: '#ede9fe', color: '#8b5cf6', borderRadius: '4px' }}>已发货</span><span>→</span>
             <span style={{ padding: '4px 8px', background: '#d1fae5', color: '#10b981', borderRadius: '4px' }}>已交付</span>
@@ -439,3 +439,4 @@ const SalesOrderPage = memo(() => {
 });
 
 export default SalesOrderPage;
+
