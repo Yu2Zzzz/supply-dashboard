@@ -92,6 +92,31 @@ const MaterialManagementPage = memo(() => {
   const [warehouses, setWarehouses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [keyword, setKeyword] = useState('');
+  const CAT_STORAGE_KEY = 'material_categories';
+
+  const loadStoredCategories = () => {
+    try {
+      const raw = localStorage.getItem(CAT_STORAGE_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr.filter(Boolean) : [];
+    } catch (e) {
+      console.warn('读取物料类目失败', e);
+      return [];
+    }
+  };
+
+  const saveCategories = (cats) => {
+    try {
+      localStorage.setItem(CAT_STORAGE_KEY, JSON.stringify(cats));
+    } catch (e) {
+      console.warn('写入物料类目失败', e);
+    }
+  };
+
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [categoryOptions, setCategoryOptions] = useState(loadStoredCategories());
+  const [newCategory, setNewCategory] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [selectedMaterial, setSelectedMaterial] = useState(null); // 选中查看详情的物料
@@ -100,7 +125,7 @@ const MaterialManagementPage = memo(() => {
   const [showModal, setShowModal] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState(null);
   const [formData, setFormData] = useState({
-    materialCode: '', name: '', spec: '', unit: 'KG', price: 0, safeStock: 100, purchaser: ''
+    materialCode: '', name: '', spec: '', unit: 'KG', price: 0, safeStock: 100, purchaser: '', category: ''
   });
   
   // 库存分配弹窗
@@ -129,13 +154,26 @@ const MaterialManagementPage = memo(() => {
   // 获取物料列表
   const fetchMaterials = useCallback(async () => {
     setLoading(true);
-    const res = await request(`/api/materials?page=${page}&pageSize=10&keyword=${keyword}`);
+    const params = new URLSearchParams({
+      page,
+      pageSize: 10,
+      keyword,
+    });
+    if (categoryFilter) params.append('category', categoryFilter);
+    const res = await request(`/api/materials?${params.toString()}`);
     if (res.success) {
-      setMaterials(res.data?.list || res.data || []);
+      const list = res.data?.list || res.data || [];
+      setMaterials(list);
+      const cats = Array.from(new Set([
+        ...list.map(m => m.category).filter(Boolean),
+        ...loadStoredCategories(),
+      ]));
+      setCategoryOptions(cats);
+      saveCategories(cats);
       setTotal(res.data?.pagination?.total || 0);
     }
     setLoading(false);
-  }, [request, page, keyword]);
+  }, [request, page, keyword, categoryFilter]);
 
   // 获取仓库列表
   // 获取仓库列表并返回数据，避免异步后状态未更新导致列表为空
@@ -222,10 +260,11 @@ const MaterialManagementPage = memo(() => {
         unit: material.unit || 'KG',
         price: material.price || 0,
         safeStock: material.safeStock || material.safe_stock || 100,
-        purchaser: material.purchaser || material.purchaserName || material.purchaser_name || ''
+        purchaser: material.purchaser || material.purchaserName || material.purchaser_name || '',
+        category: material.category || ''
       });
     } else {
-      setFormData({ materialCode: '', name: '', spec: '', unit: 'KG', price: 0, safeStock: 100, purchaser: '' });
+      setFormData({ materialCode: '', name: '', spec: '', unit: 'KG', price: 0, safeStock: 100, purchaser: '', category: '' });
     }
     setShowModal(true);
   };
@@ -565,8 +604,8 @@ const MaterialManagementPage = memo(() => {
 
       {/* 搜索栏 */}
       <Card style={{ marginBottom: '16px' }}>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <div style={{ flex: 1, position: 'relative' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, position: 'relative', minWidth: '240px' }}>
             <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
             <input
               type="text"
@@ -575,6 +614,46 @@ const MaterialManagementPage = memo(() => {
               onChange={e => setKeyword(e.target.value)}
               style={{ width: '100%', padding: '12px 14px 12px 42px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none', boxSizing: 'border-box' }}
             />
+          </div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', minWidth: '320px', flexWrap: 'wrap' }}>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              style={{ padding: '12px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', minWidth: '160px' }}
+            >
+              <option value="">全部类目</option>
+              {categoryOptions.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+              {newCategory && !categoryOptions.includes(newCategory) && (
+                <option value={newCategory}>{newCategory}（新）</option>
+              )}
+            </select>
+            <input
+              type="text"
+              placeholder="添加新类目"
+              value={newCategory}
+              onChange={e => setNewCategory(e.target.value)}
+              style={{ padding: '12px 12px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px', minWidth: '140px' }}
+            />
+            <button
+              onClick={() => {
+                if (!newCategory.trim()) return;
+                const val = newCategory.trim();
+                if (!categoryOptions.includes(val)) {
+                  setCategoryOptions(prev => {
+                    const merged = [...prev, val];
+                    saveCategories(merged);
+                    return merged;
+                  });
+                }
+                setCategoryFilter(val);
+                setPage(1);
+              }}
+              style={{ padding: '11px 14px', border: 'none', borderRadius: '10px', background: '#3b82f6', color: '#fff', fontWeight: 700, cursor: 'pointer' }}
+            >
+              设为筛选
+            </button>
           </div>
           <Button variant="secondary" icon={RefreshCw} onClick={fetchMaterials}>刷新</Button>
         </div>
@@ -593,6 +672,8 @@ const MaterialManagementPage = memo(() => {
                     <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>物料编码</th>
                     <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>物料名称</th>
                     <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>规格</th>
+                    <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>类目</th>
+                    <th style={{ textAlign: 'right', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>单价</th>
                     <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>库存</th>
                     <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>采购员</th>
                     <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>供应商</th>
@@ -608,6 +689,10 @@ const MaterialManagementPage = memo(() => {
                       </td>
                       <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{material.name}</td>
                       <td style={{ padding: '16px', fontSize: '13px', color: '#64748b' }}>{material.spec || '-'}</td>
+                      <td style={{ padding: '16px', fontSize: '13px', color: '#0f172a', fontWeight: 600 }}>{material.category || '-'}</td>
+                      <td style={{ padding: '16px', fontSize: '14px', color: '#0f172a', fontWeight: 700, textAlign: 'right' }}>
+                        ¥{(Number(material.price) || 0).toFixed(2)}
+                      </td>
                       <td style={{ padding: '16px', fontSize: '16px', fontWeight: 700, textAlign: 'center', color: (material.stock || 0) < (material.safeStock || material.safe_stock || 100) ? '#ef4444' : '#10b981' }}>
                         {material.stock || 0}
                       </td>
@@ -670,6 +755,22 @@ const MaterialManagementPage = memo(() => {
           <Input label="安全库存" type="number" value={formData.safeStock} onChange={v => setFormData({ ...formData, safeStock: parseInt(v) || 100 })} placeholder="100" />
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#374151', marginBottom: '6px' }}>类目</label>
+            <select
+              value={formData.category}
+              onChange={e => setFormData({ ...formData, category: e.target.value })}
+              style={{ width: '100%', padding: '12px 14px', fontSize: '14px', border: '2px solid #e2e8f0', borderRadius: '10px' }}
+            >
+              <option value="">请选择类目</option>
+              {categoryOptions.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+              {formData.category && !categoryOptions.includes(formData.category) && (
+                <option value={formData.category}>{formData.category}</option>
+              )}
+            </select>
+          </div>
           <Input label="采购员" value={formData.purchaser} onChange={v => setFormData({ ...formData, purchaser: v })} placeholder="如: 张三" />
         </div>
         

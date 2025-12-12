@@ -30,9 +30,34 @@ const DefaultLoading = () => (
 export default function SupplierManagementPage({ 
   Button, Input, Select, Modal, Card, EmptyState, LoadingScreen 
 }) {
+  const CAT_STORAGE_KEY = 'supplier_categories';
+
+  const loadStoredCategories = () => {
+    try {
+      const raw = localStorage.getItem(CAT_STORAGE_KEY);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr.filter(Boolean) : [];
+    } catch (e) {
+      console.warn('读取本地供应商类目失败', e);
+      return [];
+    }
+  };
+
+  const saveCategories = (cats) => {
+    try {
+      localStorage.setItem(CAT_STORAGE_KEY, JSON.stringify(cats));
+    } catch (e) {
+      console.warn('写入本地供应商类目失败', e);
+    }
+  };
+
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [categoryOptions, setCategoryOptions] = useState(loadStoredCategories());
+  const [newCategory, setNewCategory] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState(null);
   const [page, setPage] = useState(1);
@@ -49,6 +74,7 @@ export default function SupplierManagementPage({
         page: page.toString(),
         pageSize: pageSize.toString(),
         keyword: searchKeyword,
+        category: categoryFilter,
       });
 
       const response = await fetch(
@@ -64,7 +90,15 @@ export default function SupplierManagementPage({
       const result = await response.json();
       
       if (result.success) {
-        setSuppliers(result.data?.list || result.data || []);
+        const list = result.data?.list || result.data || [];
+        setSuppliers(list);
+        // 收集类目下拉选项，合并本地存储
+        const cats = Array.from(new Set([
+          ...list.map(s => s.category).filter(Boolean),
+          ...loadStoredCategories(),
+        ]));
+        setCategoryOptions(cats);
+        saveCategories(cats);
         setTotal(result.data?.pagination?.total || 0);
       }
     } catch (error) {
@@ -76,7 +110,7 @@ export default function SupplierManagementPage({
 
   useEffect(() => {
     fetchSuppliers();
-  }, [page, searchKeyword]);
+  }, [page, searchKeyword, categoryFilter]);
 
   // 删除供应商
   const handleDelete = async (id) => {
@@ -158,13 +192,14 @@ export default function SupplierManagementPage({
       </div>
 
       {/* 操作栏 */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        marginBottom: '24px',
-        gap: '16px'
-      }}>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          marginBottom: '24px',
+          gap: '16px',
+          flexWrap: 'wrap'
+        }}>
         {/* 搜索框 */}
         <div style={{ flex: 1, maxWidth: '400px' }}>
           {Input ? (
@@ -184,11 +219,74 @@ export default function SupplierManagementPage({
                 padding: '11px 14px',
                 fontSize: '14px',
                 border: '2px solid #e2e8f0',
+              borderRadius: '10px',
+              outline: 'none',
+            }}
+          />
+        )}
+        </div>
+
+        {/* 筛选：类目、状态 */}
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <div style={{ minWidth: '200px' }}>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '11px 14px',
+                fontSize: '14px',
+                border: '2px solid #e2e8f0',
                 borderRadius: '10px',
-                outline: 'none',
+              }}
+            >
+              <option value="">全部类目</option>
+              {categoryOptions.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+              {newCategory && !categoryOptions.includes(newCategory) && (
+                <option value={newCategory}>{newCategory}（新）</option>
+              )}
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <input
+              type="text"
+              placeholder="添加新类目"
+              value={newCategory}
+              onChange={(e) => setNewCategory(e.target.value)}
+              style={{
+                width: '150px',
+                padding: '11px 12px',
+                fontSize: '14px',
+                border: '2px solid #e2e8f0',
+                borderRadius: '10px',
               }}
             />
-          )}
+            <button
+              onClick={() => {
+                const val = newCategory.trim();
+                if (!val) return;
+                if (!categoryOptions.includes(val)) {
+                  setCategoryOptions((prev) => [...prev, val]);
+                  saveCategories([...categoryOptions, val]);
+                }
+                setCategoryFilter(val);
+                setPage(1);
+              }}
+              style={{
+                padding: '10px 14px',
+                border: 'none',
+                borderRadius: '10px',
+                background: '#3b82f6',
+                color: '#fff',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              设为筛选
+            </button>
+          </div>
         </div>
 
         {/* 新建按钮 */}
@@ -251,8 +349,6 @@ export default function SupplierManagementPage({
                     <th style={tableHeaderStyle}>供应商编码</th>
                     <th style={tableHeaderStyle}>供应商名称</th>
                     <th style={tableHeaderStyle}>类目</th>
-                    <th style={tableHeaderStyle}>品名</th>
-                    <th style={tableHeaderStyle}>单价</th>
                     <th style={tableHeaderStyle}>付款方式</th>
                     <th style={tableHeaderStyle}>联系人</th>
                     <th style={tableHeaderStyle}>电话</th>
@@ -287,12 +383,6 @@ export default function SupplierManagementPage({
                       </td>
                       <td style={tableCellStyle}>
                         {supplier.category || '-'}
-                      </td>
-                      <td style={tableCellStyle}>
-                        {supplier.productName || supplier.product_name || '-'}
-                      </td>
-                      <td style={tableCellStyle}>
-                        {supplier.unitPrice || supplier.unit_price ? `¥${supplier.unitPrice || supplier.unit_price}` : '-'}
                       </td>
                       <td style={tableCellStyle}>
                         {supplier.paymentMethod || supplier.payment_method || '-'}
@@ -447,8 +537,6 @@ function SupplierModal({ Modal, Input, isOpen, onClose, onSave, supplier }) {
     supplierCode: supplier?.supplierCode || supplier?.supplier_code || '',
     name: supplier?.name || '',
     category: supplier?.category || '',
-    productName: supplier?.productName || supplier?.product_name || '',
-    unitPrice: supplier?.unitPrice || supplier?.unit_price || '',
     paymentMethod: supplier?.paymentMethod || supplier?.payment_method || '',
     contactPerson: supplier?.contactPerson || supplier?.contact_person || '',
     phone: supplier?.phone || '',
@@ -495,19 +583,6 @@ function SupplierModal({ Modal, Input, isOpen, onClose, onSave, supplier }) {
                 value={formData.category}
                 onChange={(val) => setFormData({...formData, category: val})}
                 placeholder="如: 五金/木材/布料"
-              />
-              <Input
-                label="品名"
-                value={formData.productName}
-                onChange={(val) => setFormData({...formData, productName: val})}
-                placeholder="供应的主品名"
-              />
-              <Input
-                label="单价"
-                type="number"
-                value={formData.unitPrice}
-                onChange={(val) => setFormData({...formData, unitPrice: val})}
-                placeholder="如: 12.50"
               />
               <Input
                 label="付款方式"
