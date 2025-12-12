@@ -62,27 +62,30 @@ const LoginPage = memo(() => {
         overflow: 'hidden',
         zIndex: 0
       }}>
-        {danmakuLines.map((line, index) => (
+        {Array.from({ length: 12 }).map((_, index) => {
+          const line = danmakuLines[index % danmakuLines.length];
+          return (
           <div
             key={line + index}
             style={{
               position: 'absolute',
-              top: `${(index * 13) % 100}%`,
+              top: `${(index * 8.5) % 100}%`,
               left: 0,
-              width: '200%',
+              width: '400%',
               whiteSpace: 'nowrap',
-              fontSize: '20px',
-              fontWeight: 700,
-              letterSpacing: '4px',
+              fontSize: '24px',
+              fontWeight: 800,
+              letterSpacing: '6px',
               textTransform: 'uppercase',
               color: 'rgba(0,0,0,0.08)',
-              animation: `scroll-left ${16 + index * 3}s linear infinite`,
-              animationDelay: `-${index * 2}s`
+              animation: `scroll-left ${18 + index * 3}s linear infinite`,
+              animationDelay: `-${index * 3}s`
             }}
           >
-            {`${line}   ${line}   ${line}   ${line}`}
+            {`${line}   `.repeat(12)}
           </div>
-        ))}
+        );
+        })}
       </div>
 
       <div style={{ 
