@@ -552,7 +552,7 @@ const DashboardPage = memo(({ data, onNav }) => {
                   <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>客户</th>
                   <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>产品数</th>
                   <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>交付日期</th>
-                  <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>状态</th>
+                  <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>订单状态</th>
                   <th style={{ width: '40px' }}></th>
                 </tr>
               </thead>
@@ -570,7 +570,7 @@ const DashboardPage = memo(({ data, onNav }) => {
                     <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{typeof order.customer === "object" ? (order.customer?.name || "N/A") : order.customer}</td>
                     <td style={{ padding: '16px', textAlign: 'center', fontSize: '14px', color: '#64748b' }}>{order.lines.length}</td>
                     <td style={{ padding: '16px', fontSize: '14px', color: '#374151' }}>{order.deliveryDate}</td>
-                    <td style={{ padding: '16px', textAlign: 'center' }}><StatusBadge level={order.overallRisk} size="sm" /></td>
+                    <td style={{ padding: '16px', textAlign: 'center' }}><StatusTag status={order.status || 'pending'} statusMap={SO_STATUS} /></td>
                     <td style={{ padding: '16px' }}><ChevronRight size={16} style={{ color: '#94a3b8' }} /></td>
                   </TableRow>
                 ))}
@@ -808,7 +808,7 @@ const OrderDetailPage = memo(({ id, data, onNav, onBack }) => {
             <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a', margin: '0 0 8px 0' }}>订单 {order.id}</h1>
             <p style={{ fontSize: '14px', color: '#64748b', margin: 0 }}>{typeof order.customer === "object" ? (order.customer?.name || "N/A") : order.customer}</p>
           </div>
-          <StatusBadge level={orderOverallRisk} />
+          <StatusTag status={order.status || 'pending'} statusMap={SO_STATUS} />
         </div>
         <div style={{ display: 'flex', gap: '32px', marginTop: '24px', flexWrap: 'wrap' }}>
           <div>
@@ -839,8 +839,38 @@ const OrderDetailPage = memo(({ id, data, onNav, onBack }) => {
       </Card>
 
       <Card>
-        <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', margin: '0 0 20px 0' }}>产品清单</h2>
-        {loading ? (
+  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', gap: '20px' }}>
+    <h2 style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a', margin: 0 }}>产品清单</h2>
+    
+    {/* ✅ 状态说明 */}
+    <div style={{ padding: '12px 16px', background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', borderRadius: '10px', border: '1px solid #e2e8f0', minWidth: '300px' }}>
+      <div style={{ fontSize: '11px', fontWeight: 700, color: '#64748b', marginBottom: '10px' }}>物料状态说明</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#7c3aed' }}></span>
+          <span style={{ color: '#64748b' }}><strong style={{ color: '#0f172a' }}>逾期：</strong>交付日期已过，物料未到货</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444' }}></span>
+          <span style={{ color: '#64748b' }}><strong style={{ color: '#0f172a' }}>紧急：</strong>距交付 {'<'} 7天，库存不足</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f97316' }}></span>
+          <span style={{ color: '#64748b' }}><strong style={{ color: '#0f172a' }}>预警：</strong>库存 + 在途 {'<'} 需求量</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#10b981' }}></span>
+          <span style={{ color: '#64748b' }}><strong style={{ color: '#0f172a' }}>正常：</strong>库存充足，按时交付</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#64748b' }}></span>
+          <span style={{ color: '#64748b' }}><strong style={{ color: '#0f172a' }}>待计划：</strong>尚未安排采购</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  {loading ? (
           <div style={{ padding: '48px', textAlign: 'center', color: '#64748b' }}>
             <div style={{ width: '48px', height: '48px', margin: '0 auto 16px', border: '4px solid #e2e8f0', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
             正在加载产品BOM数据，计算准确风险...
