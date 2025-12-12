@@ -1,6 +1,31 @@
 // src/pages/Supplier/index.jsx - 完整的供应商管理页面
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Plus, Edit, Trash2, Building, Phone, Mail, MapPin, User } from 'lucide-react';
+
+// 与全局一致的加载样式（若上层未提供 LoadingScreen）
+const DefaultLoading = () => (
+  <div style={{ 
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: '#f8fafc'
+  }}>
+    <div style={{ textAlign: 'center' }}>
+      <div style={{
+        width: '48px',
+        height: '48px',
+        margin: '0 auto 16px',
+        border: '4px solid #e2e8f0',
+        borderTopColor: '#f97316',
+        borderRadius: '50%',
+        animation: 'spin 1s linear infinite'
+      }} />
+      <div style={{ color: '#64748b', fontSize: '14px', fontWeight: 600 }}>加载中...</div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  </div>
+);
 
 export default function SupplierManagementPage({ 
   Button, Input, Select, Modal, Card, EmptyState, LoadingScreen 
@@ -116,11 +141,9 @@ export default function SupplierManagementPage({
     }
   };
 
-  if (loading && suppliers.length === 0) {
-    return LoadingScreen ? <LoadingScreen /> : (
-      <div style={{ padding: '40px', textAlign: 'center' }}>加载中...</div>
-    );
-  }
+  const LoadingView = useMemo(() => LoadingScreen || DefaultLoading, [LoadingScreen]);
+
+  if (loading && suppliers.length === 0) return <LoadingView />;
 
   return (
     <div style={{ padding: '40px' }}>

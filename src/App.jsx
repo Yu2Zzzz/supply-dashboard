@@ -266,7 +266,32 @@ const EmptyState = memo(({ icon: Icon, title, description }) => (
   </div>
 ));
 
-const LoadingScreen = memo(() => {
+const LoadingScreen = memo(() => (
+  <div style={{ 
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: '#f8fafc'
+  }}>
+    <div style={{ textAlign: 'center' }}>
+      <div style={{
+        width: '48px',
+        height: '48px',
+        margin: '0 auto 16px',
+        border: '4px solid #e2e8f0',
+        borderTopColor: '#f97316',
+        borderRadius: '50%',
+        animation: 'spin 1s linear infinite'
+      }} />
+      <div style={{ color: '#64748b', fontSize: '14px', fontWeight: 600 }}>加载中...</div>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  </div>
+));
+
+// 登录后进入主界面前的全屏 BHR 背景加载
+const SplashScreen = memo(() => {
   const pattern = "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='100' viewBox='0 0 200 100'%3E%3Crect width='200' height='100' fill='white'/%3E%3Ctext x='10' y='70' font-family='Segoe UI Black, Arial Black, Helvetica, Arial, sans-serif' font-size='50' font-weight='900' letter-spacing='4' fill='black'%3EBHR%3C/text%3E%3C/svg%3E\")";
   return (
     <div style={{ 
@@ -2113,7 +2138,7 @@ export default function App() {
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
   useWhiteFavicon();
-  if (isLoading) return <LoadingScreen />;
+  if (isLoading) return <SplashScreen />;
   if (!isAuthenticated) return <LoginPage />;
   return <MainApp />;
 }
