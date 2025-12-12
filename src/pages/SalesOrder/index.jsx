@@ -99,6 +99,7 @@ const SalesOrderPage = memo(() => {
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [formData, setFormData] = useState({ customerId: '', orderDate: '', deliveryDate: '', salesPerson: '', status: 'pending', remark: '', lines: [] });
+  const [orderDetailCache, setOrderDetailCache] = useState({}); // 缓存订单详情，避免状态流转时丢明细
 
   // ✨ 新增客户弹窗
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -111,13 +112,27 @@ const SalesOrderPage = memo(() => {
       request('/api/customers'),
       request('/api/products')
     ]);
-    if (ordersRes.success) setOrders(ordersRes.data?.list || ordersRes.data || []);
+    if (ordersRes.success) {
+      setOrders(ordersRes.data?.list || ordersRes.data || []);
+      setOrderDetailCache({}); // 数据刷新时重置缓存，避免用旧的明细
+    }
     if (customersRes.success) setCustomers(customersRes.data?.list || customersRes.data || []);
     if (productsRes.success) setProducts(productsRes.data?.list || productsRes.data || []);
     setLoading(false);
   }, [request]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  const fetchOrderDetail = useCallback(async (orderId) => {
+    if (!orderId) return null;
+    if (orderDetailCache[orderId]) return orderDetailCache[orderId];
+    const res = await request(`/api/sales-orders/${orderId}`);
+    if (res.success && res.data) {
+      setOrderDetailCache(prev => ({ ...prev, [orderId]: res.data }));
+      return res.data;
+    }
+    return null;
+  }, [orderDetailCache, request]);
 
   const formatDateForApi = (dateStr) => {
     if (!dateStr) return null;
@@ -135,10 +150,15 @@ const SalesOrderPage = memo(() => {
       remark: formData.remark || ''
     };
     if (formData.lines.length > 0) {
-      submitData.lines = formData.lines.map(line => ({
-        productId: parseInt(line.productId), product_id: parseInt(line.productId),
-        quantity: parseInt(line.quantity) || 1, unitPrice: parseFloat(line.unitPrice) || 0, unit_price: parseFloat(line.unitPrice) || 0
+      const lines = formData.lines.map(line => ({
+        productId: parseInt(line.productId),
+        product_id: parseInt(line.productId),
+        quantity: parseInt(line.quantity) || 1,
+        unitPrice: parseFloat(line.unitPrice) || 0,
+        unit_price: parseFloat(line.unitPrice) || 0
       }));
+      submitData.lines = lines;
+      submitData.orderLines = lines; // 兼容后端字段
     }
     const endpoint = editingOrder ? `/api/sales-orders/${editingOrder.id}` : '/api/sales-orders';
     const method = editingOrder ? 'PUT' : 'POST';
@@ -154,12 +174,25 @@ const SalesOrderPage = memo(() => {
   };
 
   const handleStatusChange = async (order, newStatus) => {
+    // 拉取最新详情，确保带上订单行，避免状态更新时后端清空明细
+    const detail = await fetchOrderDetail(order.id);
+    const lines = (detail?.lines || detail?.orderLines || order.lines || order.orderLines || []).map(line => ({
+      productId: parseInt(line.productId || line.product_id),
+      product_id: parseInt(line.productId || line.product_id),
+      quantity: parseInt(line.quantity) || 1,
+      unitPrice: parseFloat(line.unitPrice || line.unit_price) || 0,
+      unit_price: parseFloat(line.unitPrice || line.unit_price) || 0
+    }));
+
     const updateData = {
       customerId: parseInt(order.customerId || order.customer_id),
       orderDate: formatDateForApi(order.orderDate || order.order_date),
       deliveryDate: formatDateForApi(order.deliveryDate || order.delivery_date),
       salesPerson: order.salesPerson || order.sales_person || '',
-      status: newStatus, remark: order.remark || ''
+      status: newStatus,
+      remark: order.remark || '',
+      lines,
+      orderLines: lines // 兼容后端字段，避免清空明细
     };
     const res = await request(`/api/sales-orders/${order.id}`, { method: 'PUT', body: JSON.stringify(updateData) });
     if (res.success) { fetchData(); alert(`状态已更新为"${SO_STATUS[newStatus]?.text || newStatus}"`); }
@@ -179,19 +212,35 @@ const SalesOrderPage = memo(() => {
     } else { alert(res.message || '添加失败'); }
   };
 
-  const openModal = (order = null) => {
+  const openModal = async (order = null) => {
     setEditingOrder(order);
     if (order) {
+      // 先填充已有数据，再尝试拉取详情补齐明细
       setFormData({
         customerId: order.customerId || order.customer_id || '',
         orderDate: formatDateInput(order.orderDate || order.order_date),
         deliveryDate: formatDateInput(order.deliveryDate || order.delivery_date),
         salesPerson: order.salesPerson || order.sales_person || '',
-        status: order.status || 'pending', remark: order.remark || '',
+        status: order.status || 'pending',
+        remark: order.remark || '',
         lines: (order.lines || order.orderLines || []).map(line => ({
-          productId: line.productId || line.product_id || '', quantity: line.quantity || 1, unitPrice: line.unitPrice || line.unit_price || 0
+          productId: line.productId || line.product_id || '',
+          quantity: line.quantity || 1,
+          unitPrice: line.unitPrice || line.unit_price || 0
         }))
       });
+
+      const detail = await fetchOrderDetail(order.id);
+      if (detail?.lines || detail?.orderLines) {
+        setFormData(prev => ({
+          ...prev,
+          lines: (detail.lines || detail.orderLines || []).map(line => ({
+            productId: line.productId || line.product_id || '',
+            quantity: line.quantity || 1,
+            unitPrice: line.unitPrice || line.unit_price || 0
+          }))
+        }));
+      }
     } else {
       setFormData({ customerId: '', orderDate: new Date().toISOString().split('T')[0], deliveryDate: '', salesPerson: user?.username || '', status: 'pending', remark: '', lines: [] });
     }

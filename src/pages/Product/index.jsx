@@ -26,7 +26,7 @@ const Button = memo(({ children, onClick, variant = 'primary', icon: Icon, size 
     warning: { background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#fff' },
     info: { background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)', color: '#fff' }
   };
-  return <button style={{ ...baseStyle, ...variants[variant] }} onClick={onClick} disabled={disabled}>{Icon && <Icon size={size === 'sm' ? 14 : 18} />}{children}</button>;
+  return <button type="button" style={{ ...baseStyle, ...variants[variant] }} onClick={onClick} disabled={disabled}>{Icon && <Icon size={size === 'sm' ? 14 : 18} />}{children}</button>;
 });
 
 const Input = memo(({ label, value, onChange, placeholder, type = 'text', required = false, disabled = false }) => (
@@ -51,7 +51,7 @@ const Select = memo(({ label, value, onChange, options, required = false, disabl
 const Modal = memo(({ isOpen, onClose, title, children, width = '500px' }) => {
   if (!isOpen) return null;
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '24px' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '24px' }}>
       <div style={{ background: '#fff', borderRadius: '20px', width: '100%', maxWidth: width, maxHeight: '90vh', overflow: 'auto', position: 'relative' }}>
         <div style={{ padding: '24px 24px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
           <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#0f172a' }}>{title}</h2>
@@ -196,23 +196,30 @@ const ProductManagementPage = memo(() => {
 
   // ============ BOM编辑功能 ============
   const openBomModal = async (product) => {
+    console.log('Open BOM modal', product);
     setBomProduct(product);
     setBomLoading(true);
     setShowBomModal(true);
-    
-    const res = await request(`/api/products/${product.id}`);
-    if (res.success && res.data) {
-      const items = res.data.bomItems || [];
-      setBomItems(items.map(item => ({
-        materialId: item.materialId || item.material_id,
-        materialCode: item.materialCode || item.material_code,
-        materialName: item.materialName || item.material_name,
-        quantity: item.quantity || 1
-      })));
-    } else {
+    try {
+      const res = await request(`/api/products/${product.id}`);
+      if (res.success && res.data) {
+        const items = res.data.bomItems || res.data.bom_items || [];
+        setBomItems(items.map(item => ({
+          materialId: item.materialId || item.material_id,
+          materialCode: item.materialCode || item.material_code,
+          materialName: item.materialName || item.material_name,
+          quantity: item.quantity || 1
+        })));
+      } else {
+        setBomItems([]);
+      }
+    } catch (err) {
+      console.error('load BOM failed', err);
       setBomItems([]);
+      alert('加载BOM失败，请稍后重试');
+    } finally {
+      setBomLoading(false);
     }
-    setBomLoading(false);
   };
 
   const addBomItem = () => {
@@ -237,15 +244,21 @@ const ProductManagementPage = memo(() => {
   };
 
   const handleSaveBom = async () => {
+    if (!bomProduct) { alert('未选择产品'); return; }
     const validItems = bomItems.filter(item => item.materialId);
+    if (validItems.length === 0) { alert('请先添加至少一条物料'); return; }
     
+    const payloadItems = validItems.map(item => ({
+      materialId: parseInt(item.materialId),
+      material_id: parseInt(item.materialId),
+      quantity: parseFloat(item.quantity) || 1
+    }));
+
     const res = await request(`/api/products/${bomProduct.id}/bom`, {
       method: 'PUT',
       body: JSON.stringify({
-        bomItems: validItems.map(item => ({
-          materialId: parseInt(item.materialId),
-          quantity: parseFloat(item.quantity) || 1
-        }))
+        bomItems: payloadItems,
+        bom_items: payloadItems // 兼容下划线字段，避免后端未识别
       })
     });
     

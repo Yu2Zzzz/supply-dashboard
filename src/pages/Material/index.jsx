@@ -117,6 +117,15 @@ const MaterialManagementPage = memo(() => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailInventoryLoading, setDetailInventoryLoading] = useState(false);
 
+  // 同步库存变更到详情页、列表和当前编辑的物料
+  const syncStockToStates = (materialId, inventories) => {
+    const totalStock = inventories.reduce((sum, inv) => sum + (Number(inv.quantity) || 0), 0);
+    setSelectedMaterial(prev => prev && prev.id === materialId ? { ...prev, stock: totalStock } : prev);
+    setInventoryMaterial(prev => prev && prev.id === materialId ? { ...prev, stock: totalStock } : prev);
+    setMaterials(prev => prev.map(m => m.id === materialId ? { ...m, stock: totalStock } : m));
+    return totalStock;
+  };
+
   // 获取物料列表
   const fetchMaterials = useCallback(async () => {
     setLoading(true);
@@ -129,11 +138,15 @@ const MaterialManagementPage = memo(() => {
   }, [request, page, keyword]);
 
   // 获取仓库列表
+  // 获取仓库列表并返回数据，避免异步后状态未更新导致列表为空
   const fetchWarehouses = useCallback(async () => {
     const res = await request('/api/warehouses');
     if (res.success) {
-      setWarehouses(res.data?.list || res.data || []);
+      const list = res.data?.list || res.data || [];
+      setWarehouses(list);
+      return list;
     }
+    return [];
   }, [request]);
 
   useEffect(() => { fetchMaterials(); }, [fetchMaterials]);
@@ -145,9 +158,8 @@ const MaterialManagementPage = memo(() => {
     setInventoryMaterial(material);
     setDetailLoading(true);
 
-    if (!warehouses.length) {
-      await fetchWarehouses();
-    }
+    // 确保使用最新的仓库列表
+    const latestWarehouses = warehouses.length ? warehouses : await fetchWarehouses();
 
     const detailRes = await request(`/api/materials/${material.id}`);
     if (detailRes.success && detailRes.data) {
@@ -165,7 +177,7 @@ const MaterialManagementPage = memo(() => {
     const invRes = await request(`/api/inventory?materialId=${material.id}`);
     if (invRes.success) {
       const inventories = invRes.data?.list || invRes.data || [];
-      const fullInventories = warehouses.map(wh => {
+      const fullInventories = latestWarehouses.map(wh => {
         const existing = inventories.find(inv =>
           (inv.warehouseId || inv.warehouse_id) == wh.id
         );
@@ -189,8 +201,10 @@ const MaterialManagementPage = memo(() => {
         };
       });
       setMaterialInventories(fullInventories);
+      syncStockToStates(material.id, fullInventories);
     } else {
       setMaterialInventories([]);
+      syncStockToStates(material.id, []);
     }
     setDetailInventoryLoading(false);
 
@@ -256,15 +270,13 @@ const MaterialManagementPage = memo(() => {
     setEditingInventory(null);
 
     try {
-      if (!warehouses.length) {
-        await fetchWarehouses();
-      }
+      const latestWarehouses = warehouses.length ? warehouses : await fetchWarehouses();
 
       const res = await request(`/api/inventory?materialId=${material.id}`);
       
       if (res.success) {
         const inventories = res.data?.list || res.data || [];
-        const sourceWarehouses = warehouses.length ? warehouses : [];
+        const sourceWarehouses = latestWarehouses.length ? latestWarehouses : [];
         
         const fullInventories = sourceWarehouses.map(wh => {
           const existing = inventories.find(inv => 
@@ -291,8 +303,10 @@ const MaterialManagementPage = memo(() => {
         });
         
         setMaterialInventories(fullInventories);
+        syncStockToStates(material.id, fullInventories);
       } else {
         setMaterialInventories([]);
+        syncStockToStates(material.id, []);
       }
     } finally {
       setInventoryLoading(false);
@@ -380,9 +394,8 @@ const MaterialManagementPage = memo(() => {
   if (loading) return <LoadingScreen />;
 
   // ✨ 如果选中了物料，显示详情页
-  if (selectedMaterial) {
-    return (
-      <div>
+  const detailView = selectedMaterial ? (
+    <div>
         <button onClick={() => setSelectedMaterial(null)} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', color: '#64748b', marginBottom: '24px', padding: 0 }}>
           <X size={20} /> 返回物料列表
         </button>
@@ -531,16 +544,15 @@ const MaterialManagementPage = memo(() => {
                 </div>
               ))}
             </div>
-          ) : (
-            <div style={{ padding: '24px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>暂无采购订单</div>
-          )}
-        </Card>
-      </div>
-    );
-  }
+        ) : (
+          <div style={{ padding: '24px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>暂无采购订单</div>
+        )}
+      </Card>
+    </div>
+  ) : null;
 
   // 主列表视图
-  return (
+  const listView = (
     <div>
       {/* 页面标题 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
@@ -636,6 +648,12 @@ const MaterialManagementPage = memo(() => {
           </>
         )}
       </Card>
+    </div>
+  );
+
+  return (
+    <div>
+      {selectedMaterial ? detailView : listView}
 
       {/* 物料编辑弹窗 */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title={editingMaterial ? '编辑物料' : '新增物料'} width="550px">
@@ -700,7 +718,7 @@ const MaterialManagementPage = memo(() => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: inventory.hasInventory ? '12px' : 0 }}>
                       <div>
                         <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>
-                          🏢 {inventory.warehouseCode} - {inventory.warehouseName}
+                          {inventory.warehouseCode} - {inventory.warehouseName}
                         </div>
                         {!inventory.hasInventory && (
                           <div style={{ fontSize: '12px', color: '#94a3b8' }}>未设置库存</div>
