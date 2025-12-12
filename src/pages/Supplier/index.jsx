@@ -18,7 +18,7 @@ export default function SupplierManagementPage({
   const fetchSuppliers = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('auth_token');
+      const token = localStorage.getItem('token');
       
       const params = new URLSearchParams({
         page: page.toString(),
@@ -58,7 +58,7 @@ export default function SupplierManagementPage({
     if (!confirm('确定要删除这个供应商吗？')) return;
 
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = localStorage.getItem('token');
       const response = await fetch(
         `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/suppliers/${id}`,
         {
@@ -86,7 +86,7 @@ export default function SupplierManagementPage({
   // 保存供应商
   const handleSave = async (formData) => {
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = localStorage.getItem('token');
       const url = editingSupplier
         ? `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/suppliers/${editingSupplier.id}`
         : `${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/suppliers`;
