@@ -81,7 +81,8 @@ export const AuthProvider = ({ children }) => {
 
   const hasRole = (roles) => {
     if (!user) return false;
-    const roleVal = user.roleCode || user.role || "";\n    return roles.map(r => String(r).toLowerCase()).includes(String(roleVal).toLowerCase());
+    const roleVal = user.roleCode || user.role || "";
+    return roles.map(r => String(r).toLowerCase()).includes(String(roleVal).toLowerCase());
   };
 
   return (
@@ -90,5 +91,4 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
-
 
