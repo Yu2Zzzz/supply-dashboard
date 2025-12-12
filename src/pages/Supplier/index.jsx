@@ -250,6 +250,10 @@ export default function SupplierManagementPage({
                   <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
                     <th style={tableHeaderStyle}>供应商编码</th>
                     <th style={tableHeaderStyle}>供应商名称</th>
+                    <th style={tableHeaderStyle}>类目</th>
+                    <th style={tableHeaderStyle}>品名</th>
+                    <th style={tableHeaderStyle}>单价</th>
+                    <th style={tableHeaderStyle}>付款方式</th>
                     <th style={tableHeaderStyle}>联系人</th>
                     <th style={tableHeaderStyle}>电话</th>
                     <th style={tableHeaderStyle}>邮箱</th>
@@ -280,6 +284,18 @@ export default function SupplierManagementPage({
                             {supplier.name || '-'}
                           </span>
                         </div>
+                      </td>
+                      <td style={tableCellStyle}>
+                        {supplier.category || '-'}
+                      </td>
+                      <td style={tableCellStyle}>
+                        {supplier.productName || supplier.product_name || '-'}
+                      </td>
+                      <td style={tableCellStyle}>
+                        {supplier.unitPrice || supplier.unit_price ? `¥${supplier.unitPrice || supplier.unit_price}` : '-'}
+                      </td>
+                      <td style={tableCellStyle}>
+                        {supplier.paymentMethod || supplier.payment_method || '-'}
                       </td>
                       <td style={tableCellStyle}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b' }}>
@@ -430,6 +446,10 @@ function SupplierModal({ Modal, Input, isOpen, onClose, onSave, supplier }) {
   const [formData, setFormData] = useState({
     supplierCode: supplier?.supplierCode || supplier?.supplier_code || '',
     name: supplier?.name || '',
+    category: supplier?.category || '',
+    productName: supplier?.productName || supplier?.product_name || '',
+    unitPrice: supplier?.unitPrice || supplier?.unit_price || '',
+    paymentMethod: supplier?.paymentMethod || supplier?.payment_method || '',
     contactPerson: supplier?.contactPerson || supplier?.contact_person || '',
     phone: supplier?.phone || '',
     email: supplier?.email || '',
@@ -469,6 +489,31 @@ function SupplierModal({ Modal, Input, isOpen, onClose, onSave, supplier }) {
                 onChange={(val) => setFormData({...formData, name: val})}
                 placeholder="如: XX供应商"
                 required
+              />
+              <Input
+                label="类目"
+                value={formData.category}
+                onChange={(val) => setFormData({...formData, category: val})}
+                placeholder="如: 五金/木材/布料"
+              />
+              <Input
+                label="品名"
+                value={formData.productName}
+                onChange={(val) => setFormData({...formData, productName: val})}
+                placeholder="供应的主品名"
+              />
+              <Input
+                label="单价"
+                type="number"
+                value={formData.unitPrice}
+                onChange={(val) => setFormData({...formData, unitPrice: val})}
+                placeholder="如: 12.50"
+              />
+              <Input
+                label="付款方式"
+                value={formData.paymentMethod}
+                onChange={(val) => setFormData({...formData, paymentMethod: val})}
+                placeholder="如: 30%预付款，70%到货"
               />
               <Input
                 label="联系人"
