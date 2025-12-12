@@ -45,6 +45,14 @@ const LoginPage = memo(() => {
           0% { transform: translateX(0); }
           100% { transform: translateX(-50%); }
         }
+        @keyframes fade-in {
+          0% { opacity: 0; }
+          100% { opacity: 1; }
+        }
+        @keyframes float-up {
+          0% { opacity: 0; transform: translateY(24px) scale(0.98); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
       `}</style>
 
       <div style={{
@@ -98,7 +106,10 @@ const LoginPage = memo(() => {
         boxShadow: '0 30px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.04)',
         position: 'relative',
         zIndex: 1,
-        border: '1px solid rgba(0,0,0,0.05)'
+        border: '1px solid rgba(0,0,0,0.05)',
+        opacity: 0,
+        animation: 'float-up 0.8s ease forwards',
+        animationDelay: '0.1s'
       }}>
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <img 

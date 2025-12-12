@@ -90,7 +90,7 @@ const MaterialManagementPage = memo(() => {
   const [showModal, setShowModal] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState(null);
   const [formData, setFormData] = useState({
-    materialCode: '', name: '', spec: '', unit: 'KG', price: 0, safeStock: 100
+    materialCode: '', name: '', spec: '', unit: 'KG', price: 0, safeStock: 100, purchaser: ''
   });
   
   // 库存分配弹窗
@@ -174,10 +174,11 @@ const MaterialManagementPage = memo(() => {
         spec: material.spec || '',
         unit: material.unit || 'KG',
         price: material.price || 0,
-        safeStock: material.safeStock || material.safe_stock || 100
+        safeStock: material.safeStock || material.safe_stock || 100,
+        purchaser: material.purchaser || material.purchaserName || material.purchaser_name || ''
       });
     } else {
-      setFormData({ materialCode: '', name: '', spec: '', unit: 'KG', price: 0, safeStock: 100 });
+      setFormData({ materialCode: '', name: '', spec: '', unit: 'KG', price: 0, safeStock: 100, purchaser: '' });
     }
     setShowModal(true);
   };
@@ -491,6 +492,7 @@ const MaterialManagementPage = memo(() => {
                     <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>物料名称</th>
                     <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>规格</th>
                     <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>库存</th>
+                    <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>采购员</th>
                     <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>在途</th>
                     <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>操作</th>
                   </tr>
@@ -505,6 +507,9 @@ const MaterialManagementPage = memo(() => {
                       <td style={{ padding: '16px', fontSize: '13px', color: '#64748b' }}>{material.spec || '-'}</td>
                       <td style={{ padding: '16px', fontSize: '16px', fontWeight: 700, textAlign: 'center', color: (material.stock || 0) < (material.safeStock || material.safe_stock || 100) ? '#ef4444' : '#10b981' }}>
                         {material.stock || 0}
+                      </td>
+                      <td style={{ padding: '16px', fontSize: '13px', color: '#0f172a', fontWeight: 600 }}>
+                        {material.purchaser || material.purchaserName || material.purchaser_name || '-'}
                       </td>
                       <td style={{ padding: '16px', fontSize: '16px', fontWeight: 700, textAlign: 'center', color: '#f97316' }}>
                         {material.in_transit || material.inTransit || 0}
@@ -554,6 +559,9 @@ const MaterialManagementPage = memo(() => {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <Input label="单价" type="number" value={formData.price} onChange={v => setFormData({ ...formData, price: parseFloat(v) || 0 })} placeholder="0.00" />
           <Input label="安全库存" type="number" value={formData.safeStock} onChange={v => setFormData({ ...formData, safeStock: parseInt(v) || 100 })} placeholder="100" />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          <Input label="采购员" value={formData.purchaser} onChange={v => setFormData({ ...formData, purchaser: v })} placeholder="如: 张三" />
         </div>
         
         <div style={{ display: 'flex', gap: '12px', marginTop: '24px', justifyContent: 'flex-end' }}>

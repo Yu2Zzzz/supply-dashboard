@@ -383,7 +383,7 @@ const Sidebar = memo(({ currentPage, onNavigate, collapsed, onToggle }) => {
         )}
       </div>
 
-      <nav style={{ flex: 1, padding: '20px 16px', overflowY: 'auto' }}>
+      <nav className="sidebar-nav" style={{ flex: 1, padding: '20px 16px', overflowY: 'auto' }}>
         {visibleItems.map(item => {
           const Icon = item.icon;
           const isActive = currentPage === item.key || currentPage.startsWith(item.key + '-');
@@ -2094,6 +2094,8 @@ const MainApp = () => {
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
         ::-webkit-scrollbar-thumb { background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); border-radius: 10px; }
+        .sidebar-nav { scrollbar-width: none; }
+        .sidebar-nav::-webkit-scrollbar { width: 0; height: 0; }
       `}</style>
     </div>
   );
