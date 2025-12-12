@@ -77,8 +77,9 @@ const LoadingScreen = memo(() => (
 const WarehouseManagementPage = memo(() => {
   const { request } = useApi();
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
-  const canEdit = user?.role === 'admin' || user?.role === 'purchaser';
+  const roleCode = (user?.roleCode || user?.role || '').toString().toLowerCase();
+  const isAdmin = roleCode === 'admin' || roleCode === 'purchaser';
+  const canEdit = isAdmin;
   
   const [warehouses, setWarehouses] = useState([]);
   const [materials, setMaterials] = useState([]);
@@ -622,4 +623,3 @@ const WarehouseManagementPage = memo(() => {
 });
 
 export default WarehouseManagementPage;
-

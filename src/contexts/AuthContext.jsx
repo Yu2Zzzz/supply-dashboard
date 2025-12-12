@@ -15,6 +15,14 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(() => localStorage.getItem('token'));
   const [isLoading, setIsLoading] = useState(true);
 
+  const normalizeUser = (rawUser) => {
+    if (!rawUser) return null;
+    const roleCode = typeof rawUser.role === 'object'
+      ? (rawUser.role.code || rawUser.role.name || '').toLowerCase()
+      : (rawUser.role || '').toLowerCase();
+    return { ...rawUser, roleCode };
+  };
+
   useEffect(() => {
     const validateToken = async () => {
       const storedToken = localStorage.getItem('token');
@@ -29,7 +37,7 @@ export const AuthProvider = ({ children }) => {
         if (res.ok) {
           const data = await res.json();
           if (data.success) {
-            setUser(data.data);
+            setUser(normalizeUser(data.data));
             setToken(storedToken);
           } else {
             localStorage.removeItem('token');
@@ -56,7 +64,7 @@ export const AuthProvider = ({ children }) => {
       if (data.success) {
         localStorage.setItem('token', data.data.token);
         setToken(data.data.token);
-        setUser(data.data.user);
+        setUser(normalizeUser(data.data.user));
         return { success: true };
       }
       return { success: false, message: data.message || '登录失败' };
@@ -73,7 +81,7 @@ export const AuthProvider = ({ children }) => {
 
   const hasRole = (roles) => {
     if (!user) return false;
-    return roles.includes(user.role);
+    const roleVal = user.roleCode || user.role || "";\n    return roles.map(r => String(r).toLowerCase()).includes(String(roleVal).toLowerCase());
   };
 
   return (
@@ -82,3 +90,5 @@ export const AuthProvider = ({ children }) => {
     </AuthContext.Provider>
   );
 };
+
+

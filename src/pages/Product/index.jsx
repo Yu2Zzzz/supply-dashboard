@@ -87,7 +87,8 @@ const LoadingScreen = memo(() => (
 const ProductManagementPage = memo(() => {
   const { request } = useApi();
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const roleCode = (user?.roleCode || user?.role || '').toString().toLowerCase();
+  const isAdmin = roleCode === 'admin' || roleCode === 'purchaser';
   
   const [products, setProducts] = useState([]);
   const [materials, setMaterials] = useState([]);
@@ -670,4 +671,3 @@ const ProductManagementPage = memo(() => {
 });
 
 export default ProductManagementPage;
-

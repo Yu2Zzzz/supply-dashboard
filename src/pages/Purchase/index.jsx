@@ -83,7 +83,8 @@ const StatusTag = memo(({ status, statusMap }) => {
 const PurchaseOrderPage = memo(() => {
   const { request } = useApi();
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const roleCode = (user?.roleCode || user?.role || '').toString().toLowerCase();
+  const isAdmin = roleCode === 'admin' || roleCode === 'purchaser';
   const [orders, setOrders] = useState([]);
   const [materials, setMaterials] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
@@ -372,4 +373,3 @@ const PurchaseOrderPage = memo(() => {
 });
 
 export default PurchaseOrderPage;
-

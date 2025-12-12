@@ -76,7 +76,8 @@ const LoadingScreen = memo(() => (
 const MaterialManagementPage = memo(() => {
   const { request } = useApi();
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin' || user?.role === 'purchaser';
+  const roleCode = (user?.roleCode || user?.role || '').toString().toLowerCase();
+  const isAdmin = roleCode === 'admin' || roleCode === 'purchaser';
   
   const [materials, setMaterials] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
@@ -706,4 +707,3 @@ const MaterialManagementPage = memo(() => {
 });
 
 export default MaterialManagementPage;
-

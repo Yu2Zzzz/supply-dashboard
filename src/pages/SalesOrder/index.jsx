@@ -85,7 +85,8 @@ const StatusTag = memo(({ status, statusMap }) => {
 const SalesOrderPage = memo(() => {
   const { request } = useApi();
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const roleCode = (user?.roleCode || user?.role || '').toString().toLowerCase();
+  const isAdmin = roleCode === 'admin' || roleCode === 'purchaser';
   
   const [orders, setOrders] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -439,4 +440,3 @@ const SalesOrderPage = memo(() => {
 });
 
 export default SalesOrderPage;
-
