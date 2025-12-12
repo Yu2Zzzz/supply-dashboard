@@ -1,6 +1,6 @@
 // src/pages/Supplier/index.jsx - 完整的供应商管理页面
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Edit, Trash2, Building, Phone, Mail, MapPin, User, Star } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, Building, Phone, Mail, MapPin, User } from 'lucide-react';
 
 export default function SupplierManagementPage({ 
   Button, Input, Select, Modal, Card, EmptyState, LoadingScreen 
@@ -231,8 +231,6 @@ export default function SupplierManagementPage({
                     <th style={tableHeaderStyle}>电话</th>
                     <th style={tableHeaderStyle}>邮箱</th>
                     <th style={tableHeaderStyle}>地址</th>
-                    <th style={tableHeaderStyle}>准时率</th>
-                    <th style={tableHeaderStyle}>质量分</th>
                     <th style={tableHeaderStyle}>操作</th>
                   </tr>
                 </thead>
@@ -285,30 +283,6 @@ export default function SupplierManagementPage({
                             {supplier.address || '-'}
                           </span>
                         </div>
-                      </td>
-                      <td style={{...tableCellStyle, textAlign: 'center'}}>
-                        <span style={{ 
-                          padding: '4px 10px', 
-                          borderRadius: '12px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          background: getScoreColor(supplier.onTimeRate || supplier.on_time_rate).bg,
-                          color: getScoreColor(supplier.onTimeRate || supplier.on_time_rate).text
-                        }}>
-                          {supplier.onTimeRate || supplier.on_time_rate || 0}%
-                        </span>
-                      </td>
-                      <td style={{...tableCellStyle, textAlign: 'center'}}>
-                        <span style={{ 
-                          padding: '4px 10px', 
-                          borderRadius: '12px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          background: getScoreColor(supplier.qualityRate || supplier.quality_rate).bg,
-                          color: getScoreColor(supplier.qualityRate || supplier.quality_rate).text
-                        }}>
-                          {supplier.qualityRate || supplier.quality_rate || 0}分
-                        </span>
                       </td>
                       <td style={tableCellStyle}>
                         <div style={{ display: 'flex', gap: '8px' }}>
@@ -437,8 +411,6 @@ function SupplierModal({ Modal, Input, isOpen, onClose, onSave, supplier }) {
     phone: supplier?.phone || '',
     email: supplier?.email || '',
     address: supplier?.address || '',
-    onTimeRate: supplier?.onTimeRate || supplier?.on_time_rate || 95,
-    qualityRate: supplier?.qualityRate || supplier?.quality_rate || 95,
   });
 
   const handleSubmit = () => {
@@ -453,7 +425,7 @@ function SupplierModal({ Modal, Input, isOpen, onClose, onSave, supplier }) {
 
   return (
     <Modal
-      open={isOpen}
+      isOpen={isOpen}
       onClose={onClose}
       title={supplier ? '编辑供应商' : '新建供应商'}
     >
@@ -499,20 +471,6 @@ function SupplierModal({ Modal, Input, isOpen, onClose, onSave, supplier }) {
                 value={formData.address}
                 onChange={(val) => setFormData({...formData, address: val})}
                 placeholder="详细地址"
-              />
-              <Input
-                label="准时率 (%)"
-                value={formData.onTimeRate}
-                onChange={(val) => setFormData({...formData, onTimeRate: val})}
-                type="number"
-                placeholder="95"
-              />
-              <Input
-                label="质量分"
-                value={formData.qualityRate}
-                onChange={(val) => setFormData({...formData, qualityRate: val})}
-                type="number"
-                placeholder="95"
               />
             </>
           ) : (
@@ -585,13 +543,4 @@ const buttonStyle = {
   color: '#fff',
   cursor: 'pointer',
   fontWeight: 600,
-};
-
-// 根据分数获取颜色
-const getScoreColor = (score) => {
-  const value = parseFloat(score) || 0;
-  if (value >= 90) return { bg: '#dcfce7', text: '#166534' };
-  if (value >= 80) return { bg: '#dbeafe', text: '#1e40af' };
-  if (value >= 70) return { bg: '#fef3c7', text: '#92400e' };
-  return { bg: '#fee2e2', text: '#991b1b' };
 };

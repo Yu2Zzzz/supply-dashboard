@@ -38,6 +38,15 @@ const Input = memo(({ label, value, onChange, placeholder, type = 'text', requir
 ));
 
 const Modal = memo(({ isOpen, onClose, title, children, width = '500px' }) => {
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const handleKey = (e) => {
+      if (e.key === 'Escape') onClose?.();
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '24px' }} onClick={onClose}>
@@ -106,6 +115,7 @@ const MaterialManagementPage = memo(() => {
   const [materialSuppliers, setMaterialSuppliers] = useState([]);
   const [materialPOs, setMaterialPOs] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailInventoryLoading, setDetailInventoryLoading] = useState(false);
 
   // 获取物料列表
   const fetchMaterials = useCallback(async () => {
@@ -132,36 +142,58 @@ const MaterialManagementPage = memo(() => {
   // ✨ 查看物料详情（供应商+采购订单）
   const viewMaterialDetail = async (material) => {
     setSelectedMaterial(material);
+    setInventoryMaterial(material);
     setDetailLoading(true);
-    
-    try {
-      // 获取供应商数据
-      const suppliersRes = await request('/api/suppliers');
-      if (suppliersRes.success) {
-        const allSuppliers = suppliersRes.data?.list || suppliersRes.data || [];
-        setMaterialSuppliers(allSuppliers);
-      } else {
-        setMaterialSuppliers([]);
-      }
-    } catch (error) {
-      console.error('获取供应商失败:', error);
-      setMaterialSuppliers([]);
+
+    if (!warehouses.length) {
+      await fetchWarehouses();
     }
-    
-    try {
-      // 获取采购订单数据
-      const posRes = await request(`/api/purchase-orders?materialId=${material.id}`);
-      if (posRes.success) {
-        const pos = posRes.data?.list || posRes.data || [];
-        setMaterialPOs(pos);
-      } else {
-        setMaterialPOs([]);
-      }
-    } catch (error) {
-      console.error('获取采购订单失败:', error);
+
+    const detailRes = await request(`/api/materials/${material.id}`);
+    if (detailRes.success && detailRes.data) {
+      const detail = detailRes.data;
+      setSelectedMaterial({ ...material, ...detail });
+      setMaterialSuppliers(detail.suppliers || []);
+      setMaterialPOs(detail.inTransit || detail.in_transit || []);
+    } else {
+      setMaterialSuppliers([]);
       setMaterialPOs([]);
     }
-    
+
+    // 详情页同步拉库存分布
+    setDetailInventoryLoading(true);
+    const invRes = await request(`/api/inventory?materialId=${material.id}`);
+    if (invRes.success) {
+      const inventories = invRes.data?.list || invRes.data || [];
+      const fullInventories = warehouses.map(wh => {
+        const existing = inventories.find(inv =>
+          (inv.warehouseId || inv.warehouse_id) == wh.id
+        );
+
+        return existing ? {
+          id: existing.id,
+          warehouseId: wh.id,
+          warehouseName: wh.name,
+          warehouseCode: wh.warehouseCode || wh.warehouse_code,
+          quantity: existing.quantity || 0,
+          safetyStock: existing.safetyStock || existing.safety_stock || 100,
+          hasInventory: true
+        } : {
+          id: null,
+          warehouseId: wh.id,
+          warehouseName: wh.name,
+          warehouseCode: wh.warehouseCode || wh.warehouse_code,
+          quantity: 0,
+          safetyStock: 100,
+          hasInventory: false
+        };
+      });
+      setMaterialInventories(fullInventories);
+    } else {
+      setMaterialInventories([]);
+    }
+    setDetailInventoryLoading(false);
+
     setDetailLoading(false);
   };
 
@@ -222,42 +254,49 @@ const MaterialManagementPage = memo(() => {
     setInventoryLoading(true);
     setShowInventoryModal(true);
     setEditingInventory(null);
-    
-    const res = await request(`/api/inventory?materialId=${material.id}`);
-    
-    if (res.success) {
-      const inventories = res.data?.list || res.data || [];
+
+    try {
+      if (!warehouses.length) {
+        await fetchWarehouses();
+      }
+
+      const res = await request(`/api/inventory?materialId=${material.id}`);
       
-      const fullInventories = warehouses.map(wh => {
-        const existing = inventories.find(inv => 
-          (inv.warehouseId || inv.warehouse_id) == wh.id
-        );
+      if (res.success) {
+        const inventories = res.data?.list || res.data || [];
+        const sourceWarehouses = warehouses.length ? warehouses : [];
         
-        return existing ? {
-          id: existing.id,
-          warehouseId: wh.id,
-          warehouseName: wh.name,
-          warehouseCode: wh.warehouseCode || wh.warehouse_code,
-          quantity: existing.quantity || 0,
-          safetyStock: existing.safetyStock || existing.safety_stock || 100,
-          hasInventory: true
-        } : {
-          id: null,
-          warehouseId: wh.id,
-          warehouseName: wh.name,
-          warehouseCode: wh.warehouseCode || wh.warehouse_code,
-          quantity: 0,
-          safetyStock: 100,
-          hasInventory: false
-        };
-      });
-      
-      setMaterialInventories(fullInventories);
-    } else {
-      setMaterialInventories([]);
+        const fullInventories = sourceWarehouses.map(wh => {
+          const existing = inventories.find(inv => 
+            (inv.warehouseId || inv.warehouse_id) == wh.id
+          );
+          
+          return existing ? {
+            id: existing.id,
+            warehouseId: wh.id,
+            warehouseName: wh.name,
+            warehouseCode: wh.warehouseCode || wh.warehouse_code,
+            quantity: existing.quantity || 0,
+            safetyStock: existing.safetyStock || existing.safety_stock || 100,
+            hasInventory: true
+          } : {
+            id: null,
+            warehouseId: wh.id,
+            warehouseName: wh.name,
+            warehouseCode: wh.warehouseCode || wh.warehouse_code,
+            quantity: 0,
+            safetyStock: 100,
+            hasInventory: false
+          };
+        });
+        
+        setMaterialInventories(fullInventories);
+      } else {
+        setMaterialInventories([]);
+      }
+    } finally {
+      setInventoryLoading(false);
     }
-    
-    setInventoryLoading(false);
   };
 
   // 编辑库存
@@ -381,9 +420,60 @@ const MaterialManagementPage = memo(() => {
           </div>
         </Card>
 
+        {/* 库存分布 */}
+        <Card style={{ marginBottom: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', margin: 0 }}>库存分布</h2>
+            <Button size="sm" variant="secondary" icon={Warehouse} onClick={() => openInventoryModal(selectedMaterial)}>
+              管理库存
+            </Button>
+          </div>
+          {detailInventoryLoading ? (
+            <div style={{ padding: '12px', color: '#64748b' }}>库存加载中...</div>
+          ) : materialInventories.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {materialInventories.map((inventory, idx) => {
+                const status = inventory.hasInventory ? getInventoryStatus(inventory.quantity, inventory.safetyStock) : null;
+                const StatusIcon = status?.icon;
+                return (
+                  <div key={idx} style={{ padding: '12px 14px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
+                          {inventory.warehouseCode} - {inventory.warehouseName}
+                        </div>
+                        {!inventory.hasInventory && <div style={{ fontSize: '12px', color: '#94a3b8' }}>未设置库存</div>}
+                      </div>
+                      {inventory.hasInventory && status && (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 10px', background: status.bgColor, borderRadius: '8px' }}>
+                          <StatusIcon size={14} style={{ color: status.color }} />
+                          <span style={{ fontSize: '12px', fontWeight: 700, color: status.color }}>{status.text}</span>
+                        </div>
+                      )}
+                    </div>
+                    {inventory.hasInventory && (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px', marginTop: '10px', fontWeight: 700, color: '#0f172a' }}>
+                        <span>库存：{(Number(inventory.quantity) || 0).toFixed(1)}</span>
+                        <span>安全库存：{inventory.safetyStock || 100}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ padding: '12px', color: '#94a3b8' }}>暂无库存数据</div>
+          )}
+        </Card>
+
         {/* 供应商列表 */}
         <Card style={{ marginBottom: '24px' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', marginBottom: '20px' }}>供应商</h2>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, color: '#0f172a', margin: 0 }}>供应商</h2>
+            <Button size="sm" variant="secondary" icon={Edit} onClick={() => window.open('/suppliers', '_blank')}>
+              编辑供应商
+            </Button>
+          </div>
           {detailLoading ? (
             <div style={{ padding: '24px', textAlign: 'center', color: '#64748b' }}>加载中...</div>
           ) : materialSuppliers.length > 0 ? (
@@ -393,19 +483,18 @@ const MaterialManagementPage = memo(() => {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
                       <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
-                        {supplier.name || supplier.supplier_name}
-                        {idx === 0 && <span style={{ marginLeft: '8px', padding: '2px 8px', fontSize: '11px', background: '#ffedd5', color: '#f97316', borderRadius: '4px', fontWeight: 600 }}>主供应商</span>}
+                        {supplier.supplierName || supplier.name || supplier.supplier_name}
+                        {(supplier.isMain || supplier.is_main || idx === 0) && (
+                          <span style={{ marginLeft: '8px', padding: '2px 8px', fontSize: '11px', background: '#ffedd5', color: '#f97316', borderRadius: '4px', fontWeight: 600 }}>主供应商</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                        编码：{supplier.supplierCode || supplier.supplier_code || '-'}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '16px' }}>
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '10px', color: '#64748b' }}>准时率</div>
-                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#10b981' }}>94%</div>
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '10px', color: '#64748b' }}>质量率</div>
-                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#10b981' }}>97%</div>
-                      </div>
+                    <div style={{ display: 'flex', gap: '16px', color: '#0f172a', fontWeight: 700, fontSize: '13px' }}>
+                      <span>价格：{supplier.price ? `￥${supplier.price}` : '-'}</span>
+                      <span>交期：{supplier.leadTime || supplier.lead_time ? `${supplier.leadTime || supplier.lead_time} 天` : '-'}</span>
                     </div>
                   </div>
                 </div>
@@ -427,7 +516,7 @@ const MaterialManagementPage = memo(() => {
                 <div key={idx} style={{ padding: '14px 16px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{po.orderNo || po.order_no}</div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: '#0f172a' }}>{po.poNo || po.orderNo || po.order_no}</div>
                       <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
                         {po.supplierName || po.supplier_name} | {po.quantity} {selectedMaterial.unit}
                       </div>
@@ -435,7 +524,7 @@ const MaterialManagementPage = memo(() => {
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: '11px', color: '#64748b' }}>预计</div>
                       <div style={{ fontSize: '13px', fontWeight: 600, color: '#374151' }}>
-                        {po.expectedDate ? new Date(po.expectedDate).toLocaleDateString('zh-CN') : '-'}
+                        {po.expectedDate || po.expected_date ? new Date(po.expectedDate || po.expected_date).toLocaleDateString('zh-CN') : '-'}
                       </div>
                     </div>
                   </div>
@@ -494,6 +583,7 @@ const MaterialManagementPage = memo(() => {
                     <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>规格</th>
                     <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>库存</th>
                     <th style={{ textAlign: 'left', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>采购员</th>
+                    <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>供应商</th>
                     <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>在途</th>
                     <th style={{ textAlign: 'center', padding: '14px 16px', fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>操作</th>
                   </tr>
@@ -512,14 +602,14 @@ const MaterialManagementPage = memo(() => {
                       <td style={{ padding: '16px', fontSize: '13px', color: '#0f172a', fontWeight: 600 }}>
                         {material.purchaser || material.purchaserName || material.purchaser_name || '-'}
                       </td>
+                      <td style={{ padding: '16px', fontSize: '13px', color: '#0f172a', fontWeight: 600, textAlign: 'center' }}>
+                        {(material.supplierCount || material.supplier_count || 0)} 家
+                      </td>
                       <td style={{ padding: '16px', fontSize: '16px', fontWeight: 700, textAlign: 'center', color: '#f97316' }}>
                         {material.in_transit || material.inTransit || 0}
                       </td>
                       <td style={{ padding: '16px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
-                          <Button size="sm" variant="info" icon={Warehouse} onClick={() => openInventoryModal(material)}>
-                            库存
-                          </Button>
                           {isAdmin && (
                             <>
                               <Button size="sm" variant="secondary" icon={Edit} onClick={() => openMaterialModal(material)}>编辑</Button>
@@ -553,10 +643,10 @@ const MaterialManagementPage = memo(() => {
           <Input label="物料编码" value={formData.materialCode} onChange={v => setFormData({ ...formData, materialCode: v })} required placeholder="如: M001" />
           <Input label="物料名称" value={formData.name} onChange={v => setFormData({ ...formData, name: v })} required placeholder="如: 钢管" />
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-          <Input label="规格" value={formData.spec} onChange={v => setFormData({ ...formData, spec: v })} placeholder="如: 20mm x 2m" />
-          <Input label="单位" value={formData.unit} onChange={v => setFormData({ ...formData, unit: v })} placeholder="如: KG, M, PCS" />
-        </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <Input label="规格" value={formData.spec} onChange={v => setFormData({ ...formData, spec: v })} placeholder="如: 20mm x 2m" />
+            <Input label="单位" value={formData.unit} onChange={v => setFormData({ ...formData, unit: v })} placeholder="如: KG, M, PCS" />
+          </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <Input label="单价" type="number" value={formData.price} onChange={v => setFormData({ ...formData, price: parseFloat(v) || 0 })} placeholder="0.00" />
           <Input label="安全库存" type="number" value={formData.safeStock} onChange={v => setFormData({ ...formData, safeStock: parseInt(v) || 100 })} placeholder="100" />
