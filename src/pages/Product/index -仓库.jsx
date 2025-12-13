@@ -134,8 +134,7 @@ const ProductManagementPage = memo(() => {
 
   // 获取物料和仓库列表
   const fetchMaterials = useCallback(async () => {
-    // 拉全量物料（放大 pageSize，避免下拉只显示前 20 条导致“请选择物料”）
-    const res = await request('/api/materials?page=1&pageSize=2000&status=active');
+    const res = await request('/api/materials');
     if (res.success) setMaterials(res.data?.list || res.data || []);
   }, [request]);
 
